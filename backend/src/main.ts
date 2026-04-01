@@ -35,7 +35,7 @@ async function bootstrap(): Promise<void> {
   app.use(snakeCaseResponseMiddleware);
 
   // Apply auth to all /api routes (health endpoints are public)
-  app.use('/api', authMiddleware);
+  app.use('/api', authMiddleware(config));
 
   // --- DI Container ---
   const container = new DIContainer();

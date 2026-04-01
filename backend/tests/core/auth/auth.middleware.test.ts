@@ -1,8 +1,16 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import jwt from 'jsonwebtoken';
+import { describe, it, expect, jest } from '@jest/globals';
 import { authMiddleware } from '@core/auth/auth.middleware';
 
-describe('authMiddleware', () => {
+const mockConfig = {
+  jwt: { publicKey: 'test-key', privateKey: 'test', accessTokenTtl: '15m', refreshTokenTtl: '7d' },
+  port: 3000,
+  database: { host: 'localhost', port: 5432, user: 'test', password: 'test', name: 'test' },
+  rabbitmq: { url: 'amqp://localhost' },
+  redis: { url: 'redis://localhost' },
+  logLevel: 'info' as const,
+};
+
+describe('authMiddleware (factory)', () => {
   function createReq(authHeader?: string) {
     return {
       headers: authHeader ? { authorization: authHeader } : {},
@@ -14,19 +22,36 @@ describe('authMiddleware', () => {
     return { status: jest.fn<(...args: any[]) => any>().mockReturnThis(), json: jest.fn() } as any;
   }
 
+  it('should return a middleware function', () => {
+    const middleware = authMiddleware(mockConfig as any);
+    expect(typeof middleware).toBe('function');
+    expect(middleware.length).toBe(3);
+  });
+
   it('should reject request without Authorization header', () => {
+    const middleware = authMiddleware(mockConfig as any);
     const req = createReq();
     const res = createRes();
     const next = jest.fn();
 
-    expect(() => authMiddleware(req, res, next)).toThrow();
+    expect(() => middleware(req, res, next)).toThrow('Missing');
   });
 
   it('should reject non-Bearer token', () => {
+    const middleware = authMiddleware(mockConfig as any);
     const req = createReq('Basic abc123');
     const res = createRes();
     const next = jest.fn();
 
-    expect(() => authMiddleware(req, res, next)).toThrow();
+    expect(() => middleware(req, res, next)).toThrow();
+  });
+
+  it('should reject invalid token', () => {
+    const middleware = authMiddleware(mockConfig as any);
+    const req = createReq('Bearer invalid-token');
+    const res = createRes();
+    const next = jest.fn();
+
+    expect(() => middleware(req, res, next)).toThrow('Invalid token');
   });
 });
