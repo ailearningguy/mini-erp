@@ -34,15 +34,11 @@ const reserveInventoryStep: ISagaStep<OrderContext> = {
   timeout: SAGA_CONSTANTS.DEFAULT_STEP_TIMEOUT_MS,
   retry: { maxAttempts: 2, backoffMs: 1000, retryableErrors: ['TIMEOUT'] },
   async execute(ctx: OrderContext): Promise<void> {
-    // Call inventory service to reserve stock
-    // ctx.inventoryReservations = reservationIds
     ctx.inventoryReservations = ctx.items.map(
       (item) => `res_${item.productId}_${Date.now()}`,
     );
   },
   async compensate(ctx: OrderContext): Promise<void> {
-    // Release inventory reservations
-    // await inventoryService.release(ctx.inventoryReservations)
     ctx.inventoryReservations = [];
   },
 };
@@ -52,13 +48,9 @@ const chargePaymentStep: ISagaStep<OrderContext> = {
   timeout: SAGA_CONSTANTS.DEFAULT_STEP_TIMEOUT_MS,
   retry: { maxAttempts: 1, backoffMs: 0, retryableErrors: ['TIMEOUT'] },
   async execute(ctx: OrderContext): Promise<void> {
-    // Call payment service to charge
-    // ctx.paymentTransactionId = transaction.id
     ctx.paymentTransactionId = `txn_${Date.now()}`;
   },
   async compensate(ctx: OrderContext): Promise<void> {
-    // Refund payment if charged
-    // await paymentService.refund(ctx.paymentTransactionId)
     ctx.paymentTransactionId = undefined;
   },
 };
@@ -69,11 +61,9 @@ const confirmOrderStep: ISagaStep<OrderContext> = {
   retry: { maxAttempts: 3, backoffMs: 1000, retryableErrors: ['TIMEOUT', 'CONFLICT'] },
   async execute(_ctx: OrderContext): Promise<void> {
     // Update order status to confirmed
-    // await orderService.confirm(ctx.orderId)
   },
   async compensate(_ctx: OrderContext): Promise<void> {
     // Revert order status
-    // await orderService.cancel(ctx.orderId)
   },
 };
 
