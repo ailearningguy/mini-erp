@@ -139,7 +139,15 @@ async function bootstrap(): Promise<void> {
   }
 
   const eventConsumer = container.resolve<EventConsumer>('EventConsumer');
+  const cacheService = container.resolve<CacheService>('CacheService');
   analyticsPlugin.setEventConsumer(eventConsumer);
+
+  eventConsumer.on('product.updated.v1', async (event) => {
+    await cacheService.invalidate(`product:${event.aggregate_id}`);
+  });
+  eventConsumer.on('product.deactivated.v1', async (event) => {
+    await cacheService.invalidate(`product:${event.aggregate_id}`);
+  });
 
   // --- Health check ---
   app.get('/health/liveness', (_req, res) => {
