@@ -19,6 +19,10 @@ import { ProductModule } from '@modules/product/product.module';
 import { AnalyticsPlugin } from '@plugins/analytics/analytics.plugin';
 import { requestIdMiddleware, snakeCaseMiddleware, snakeCaseResponseMiddleware, globalErrorHandler } from '@core/api/response';
 import { authMiddleware } from '@core/auth/auth.middleware';
+import { createIdempotencyMiddleware } from '@core/idempotency/idempotency.middleware';
+import { ApiIdempotencyStore } from '@core/idempotency/api-idempotency';
+import { createRateLimiter } from '@core/api/rate-limiter';
+import { API_CONSTANTS } from '@shared/constants';
 
 type AnyDb = Record<string, unknown>;
 
@@ -34,13 +38,9 @@ async function bootstrap(): Promise<void> {
   app.use(snakeCaseMiddleware);
   app.use(snakeCaseResponseMiddleware);
 
-  // Apply auth to all /api routes (health endpoints are public)
-  app.use('/api', authMiddleware(config));
-
   // --- DI Container ---
   const container = new DIContainer();
 
-  // Register core services
   container.register('Config', () => config);
   container.register('EventSchemaRegistry', () => new EventSchemaRegistry());
   container.register('Database', () => {
@@ -104,6 +104,20 @@ async function bootstrap(): Promise<void> {
     (token) => container.getDependencies(token),
   );
 
+  // --- Rate limiter (before auth) ---
+  app.use(createRateLimiter(
+    API_CONSTANTS.DEFAULT_RATE_LIMIT_MAX_REQUESTS,
+    API_CONSTANTS.DEFAULT_RATE_LIMIT_WINDOW_MS,
+  ));
+
+  // --- Idempotency (before auth) ---
+  const redis = container.resolve<Redis>('Redis');
+  const idempotencyStore = new ApiIdempotencyStore(redis as any);
+  app.use(createIdempotencyMiddleware(idempotencyStore));
+
+  // --- Auth (after rate limiter + idempotency) ---
+  app.use('/api', authMiddleware(config));
+
   // --- Register modules ---
   const db = container.resolve<AnyDb>('Database');
   const eventBus = container.resolve<EventBus>('EventBus');
@@ -118,6 +132,9 @@ async function bootstrap(): Promise<void> {
   await pluginLoader.register(analyticsPlugin);
   await pluginLoader.activate('analytics');
 
+  const eventConsumer = container.resolve<EventConsumer>('EventConsumer');
+  analyticsPlugin.setEventConsumer(eventConsumer);
+
   // --- Health check ---
   app.get('/health/liveness', (_req, res) => {
     res.json({ status: 'ok' });
@@ -126,7 +143,6 @@ async function bootstrap(): Promise<void> {
   app.get('/health/readiness', async (_req, res) => {
     const checks = [];
 
-    // Check database
     try {
       await (db as any).execute('SELECT 1');
       checks.push({ name: 'database', ok: true });
@@ -134,7 +150,6 @@ async function bootstrap(): Promise<void> {
       checks.push({ name: 'database', ok: false });
     }
 
-    // Check redis
     try {
       const redisClient = container.resolve<Redis>('Redis');
       await redisClient.ping();
@@ -151,10 +166,45 @@ async function bootstrap(): Promise<void> {
   app.use(globalErrorHandler as express.ErrorRequestHandler);
 
   // --- Start server ---
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     console.log(`ERP Backend running on port ${config.port}`);
     console.log(`Health check: http://localhost:${config.port}/health/readiness`);
   });
+
+  // --- Graceful shutdown ---
+  const shutdown = async (signal: string) => {
+    console.log(`[${signal}] Graceful shutdown initiated...`);
+
+    server.close(async () => {
+      console.log('HTTP server closed');
+
+      try {
+        const pool = (db as any).$client;
+        if (pool) await pool.end();
+        console.log('Database pool closed');
+      } catch (e) {
+        console.error('Error closing database pool:', e);
+      }
+
+      try {
+        const redisClient = container.resolve<any>('Redis');
+        await redisClient.quit();
+        console.log('Redis connection closed');
+      } catch (e) {
+        console.error('Error closing Redis:', e);
+      }
+
+      process.exit(0);
+    });
+
+    setTimeout(() => {
+      console.error('Forced shutdown after timeout');
+      process.exit(1);
+    }, 30_000);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 bootstrap().catch((error) => {

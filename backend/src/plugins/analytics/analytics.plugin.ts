@@ -84,6 +84,22 @@ class AnalyticsPlugin implements IPlugin {
   getEventCount(): number {
     return this.events.length;
   }
+
+  setEventConsumer(consumer: { on(eventType: string, handler: (event: EventEnvelope, tx: Record<string, unknown>) => Promise<void>): void }): void {
+    const metadata = this.getMetadata();
+    const trackedEvents: string[] = (metadata.config?.trackedEvents as string[]) ?? [];
+
+    for (const eventType of trackedEvents) {
+      consumer.on(eventType, async (event: EventEnvelope, _tx: Record<string, unknown>) => {
+        this.events.push({
+          eventType: event.type,
+          aggregateId: event.aggregate_id,
+          timestamp: event.timestamp,
+          data: event.payload,
+        });
+      });
+    }
+  }
 }
 
 export { AnalyticsPlugin };

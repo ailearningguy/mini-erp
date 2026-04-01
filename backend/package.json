@@ -18,7 +18,7 @@
     "migrate:generate": "drizzle-kit generate",
     "migrate:rollback": "drizzle-kit rollback",
     "seed": "tsx scripts/seed.ts",
-    "outbox-worker": "tsx src/core/outbox/outbox-worker.ts"
+    "outbox-worker": "tsx src/core/outbox/outbox-worker.entry.ts"
   },
   "dependencies": {
     "amqplib": "^0.10.4",
