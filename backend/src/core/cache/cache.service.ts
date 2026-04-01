@@ -28,7 +28,7 @@ class CacheService {
     }
   }
 
-  async set<T>(key: string, value: T, ttl = CACHE_CONSTANTS.DEFAULT_TTL_SECONDS): Promise<void> {
+  async set<T>(key: string, value: T, ttl: number = CACHE_CONSTANTS.DEFAULT_TTL_SECONDS): Promise<void> {
     try {
       await this.redis.set(`cache:${key}`, JSON.stringify(value), 'EX', ttl);
     } catch {
@@ -47,7 +47,7 @@ class CacheService {
   async getOrSet<T>(
     key: string,
     factory: () => Promise<T>,
-    ttl = CACHE_CONSTANTS.DEFAULT_TTL_SECONDS,
+    ttl: number = CACHE_CONSTANTS.DEFAULT_TTL_SECONDS,
   ): Promise<T> {
     const cached = await this.get<T>(key);
     if (cached !== null) return cached;
@@ -59,7 +59,7 @@ class CacheService {
 
     pending = (async () => {
       try {
-        return await factory();
+        return await this.acquireLockAndFetch(key, factory, ttl);
       } finally {
         this.mutexes.delete(key);
       }
@@ -69,7 +69,6 @@ class CacheService {
 
     try {
       const result = await pending;
-      await this.set(key, result, ttl);
       return result;
     } catch (error) {
       this.mutexes.delete(key);
@@ -77,10 +76,36 @@ class CacheService {
     }
   }
 
+  private async acquireLockAndFetch<T>(
+    key: string,
+    factory: () => Promise<T>,
+    ttl: number,
+  ): Promise<T> {
+    const lockKey = `lock:${key}`;
+    const lockTtlMs = CACHE_CONSTANTS.LOCK_TTL_MS;
+
+    const acquired = await this.redis.setnx(lockKey, '1', 'PX', lockTtlMs);
+    if (acquired) {
+      try {
+        const value = await factory();
+        await this.set(key, value, ttl);
+        return value;
+      } finally {
+        await this.redis.del(lockKey);
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, CACHE_CONSTANTS.LOCK_RETRY_DELAY_MS));
+    const retryCached = await this.get<T>(key);
+    if (retryCached !== null) return retryCached;
+
+    return factory();
+  }
+
   async getWithFallback<T>(
     key: string,
     dbFactory: () => Promise<T>,
-    ttl = CACHE_CONSTANTS.DEFAULT_TTL_SECONDS,
+    ttl: number = CACHE_CONSTANTS.DEFAULT_TTL_SECONDS,
   ): Promise<T> {
     try {
       const cached = await this.get<T>(key);

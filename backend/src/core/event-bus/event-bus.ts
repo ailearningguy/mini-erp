@@ -34,7 +34,7 @@ class EventBus {
 
     this.schemaRegistry.validate(fullEvent.type, fullEvent);
 
-    await this.outboxRepo.insert(fullEvent, tx);
+    await this.outboxRepo.insert(fullEvent, tx as any);
 
     return fullEvent;
   }

@@ -32,7 +32,7 @@ class ProductService implements IProductService {
     return result[0] ?? null;
   }
 
-  async list(limit: number, cursor?: string): Promise<{ items: Product[]; nextCursor: string | null }> {
+  async list(limit: number, _cursor?: string): Promise<{ items: Product[]; nextCursor: string | null }> {
     const query = (this.db as any)
       .select()
       .from(products)
@@ -60,7 +60,8 @@ class ProductService implements IProductService {
 
     const id = randomUUID();
 
-    const result = await (this.db as any).transaction(async (tx: AnyDb) => {
+    const result = await (this.db as any).transaction(async (tx_: AnyDb) => {
+      const tx = tx_ as any;
       await tx.insert(products).values({
         id,
         productName: dto.productName,
@@ -119,7 +120,8 @@ class ProductService implements IProductService {
     if (dto.stock !== undefined) changes.stock = dto.stock;
     if (dto.isActive !== undefined) changes.isActive = dto.isActive;
 
-    const result = await (this.db as any).transaction(async (tx: AnyDb) => {
+    const result = await (this.db as any).transaction(async (tx_: AnyDb) => {
+      const tx = tx_ as any;
       await tx
         .update(products)
         .set({
@@ -162,7 +164,8 @@ class ProductService implements IProductService {
       throw new AppError(ErrorCode.NOT_FOUND, `Product not found: ${id}`, 404);
     }
 
-    await (this.db as any).transaction(async (tx: AnyDb) => {
+    await (this.db as any).transaction(async (tx_: AnyDb) => {
+      const tx = tx_ as any;
       await tx
         .update(products)
         .set({ isActive: false, updatedAt: new Date() })

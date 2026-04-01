@@ -1,8 +1,3 @@
-interface DependencyGraph {
-  getNodes(): string[];
-  getDependencies(node: string): string[];
-}
-
 class ArchitectureValidator {
   async validateOnStartup(
     diTokens: string[],

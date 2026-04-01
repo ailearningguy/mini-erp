@@ -8,7 +8,7 @@ const RULES = {
       docs: { description: 'Forbid cross-module imports' },
       schema: [],
     },
-    create(context: any) {
+    create(context) {
       const filename = context.getFilename();
       const moduleMatch = filename.match(/src\/modules\/([^/]+)\//);
       if (!moduleMatch) return {};
@@ -16,7 +16,7 @@ const RULES = {
       const currentModule = moduleMatch[1];
 
       return {
-        ImportDeclaration(node: any) {
+        ImportDeclaration(node) {
           const importPath = node.source.value;
           const importedModuleMatch = importPath.match(/@modules\/([^/]+)\//);
 
@@ -37,12 +37,12 @@ const RULES = {
       docs: { description: 'Forbid repository injection in plugins' },
       schema: [],
     },
-    create(context: any) {
+    create(context) {
       const filename = context.getFilename();
       if (!filename.includes('/plugins/')) return {};
 
       return {
-        ImportDeclaration(node: any) {
+        ImportDeclaration(node) {
           const importPath = node.source.value;
           if (importPath.includes('.repository') || importPath.includes('.schema')) {
             context.report({
@@ -61,12 +61,12 @@ const RULES = {
       docs: { description: 'Forbid core domain event emission from plugins' },
       schema: [],
     },
-    create(context: any) {
+    create(context) {
       const filename = context.getFilename();
       if (!filename.includes('/plugins/')) return {};
 
       return {
-        CallExpression(node: any) {
+        CallExpression(node) {
           if (
             node.callee.type === 'MemberExpression' &&
             node.callee.property.name === 'emit' &&
@@ -75,7 +75,7 @@ const RULES = {
             const eventTypeArg = node.arguments[0];
             if (eventTypeArg.type === 'ObjectExpression') {
               const typeProp = eventTypeArg.properties.find(
-                (p: any) => p.key.name === 'type',
+                (p) => p.key.name === 'type',
               );
               if (typeProp && typeProp.value.type === 'Literal') {
                 const eventType = typeProp.value.value;
@@ -99,12 +99,12 @@ const RULES = {
       docs: { description: 'Forbid direct outbox access outside core' },
       schema: [],
     },
-    create(context: any) {
+    create(context) {
       const filename = context.getFilename();
       if (filename.includes('/core/outbox')) return {};
 
       return {
-        ImportDeclaration(node: any) {
+        ImportDeclaration(node) {
           const importPath = node.source.value;
           if (importPath.includes('/core/outbox')) {
             context.report({
@@ -123,9 +123,9 @@ const RULES = {
       docs: { description: 'Forbid importing infrastructure configs' },
       schema: [],
     },
-    create(context: any) {
+    create(context) {
       return {
-        ImportDeclaration(node: any) {
+        ImportDeclaration(node) {
           const importPath = node.source.value;
           const infraPatterns = ['docker-compose', 'k8s', 'kubernetes', 'terraform', '.env'];
           if (infraPatterns.some((p) => importPath.includes(p))) {

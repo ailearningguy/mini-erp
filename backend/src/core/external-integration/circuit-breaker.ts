@@ -1,4 +1,4 @@
-import { CIRCUIT_BREAKER_CONSTANTS, ErrorCode } from '@shared/constants';
+import { ErrorCode } from '@shared/constants';
 import { AppError } from '@shared/errors/app-error';
 
 enum CircuitState {

@@ -1,5 +1,8 @@
 import express from 'express';
 import helmet from 'helmet';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import pg from 'pg';
+import Redis from 'ioredis';
 import { loadConfig } from '@core/config/config';
 import { DIContainer } from '@core/di/container';
 import { EventBus } from '@core/event-bus/event-bus';
@@ -14,8 +17,10 @@ import { CacheService } from '@core/cache/cache.service';
 import { ArchitectureValidator } from '@core/architecture-validator/validator';
 import { ProductModule } from '@modules/product/product.module';
 import { AnalyticsPlugin } from '@plugins/analytics/analytics.plugin';
-import { requestIdMiddleware, snakeCaseMiddleware, globalErrorHandler } from '@core/api/response';
-import { API_CONSTANTS } from '@shared/constants';
+import { requestIdMiddleware, snakeCaseMiddleware, snakeCaseResponseMiddleware, globalErrorHandler } from '@core/api/response';
+import { authMiddleware } from '@core/auth/auth.middleware';
+
+type AnyDb = Record<string, unknown>;
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -25,8 +30,12 @@ async function bootstrap(): Promise<void> {
   // --- Middleware ---
   app.use(helmet());
   app.use(express.json());
-  app.use(requestIdMiddleware as express.RequestHandler);
-  app.use(snakeCaseMiddleware as express.RequestHandler);
+  app.use(requestIdMiddleware);
+  app.use(snakeCaseMiddleware);
+  app.use(snakeCaseResponseMiddleware);
+
+  // Apply auth to all /api routes (health endpoints are public)
+  app.use('/api', authMiddleware);
 
   // --- DI Container ---
   const container = new DIContainer();
@@ -35,32 +44,40 @@ async function bootstrap(): Promise<void> {
   container.register('Config', () => config);
   container.register('EventSchemaRegistry', () => new EventSchemaRegistry());
   container.register('Database', () => {
-    // In real implementation: create Drizzle connection
-    // const { Pool } = require('pg');
-    // const pool = new Pool({ connectionString: ... });
-    // return drizzle(pool);
-    return {} as any;
+    const pool = new pg.Pool({
+      host: config.database.host,
+      port: config.database.port,
+      user: config.database.user,
+      password: config.database.password,
+      database: config.database.name,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
+    return drizzle(pool);
   });
   container.register('Redis', () => {
-    // In real implementation: create Redis connection
-    // const Redis = require('ioredis');
-    // return new Redis(config.redis.url);
-    return {} as any;
+    const redis = new Redis(config.redis.url, {
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+    });
+    redis.on('error', (err) => console.error('Redis connection error:', err));
+    return redis;
   });
   container.register('OutboxRepository', () => {
-    const db = container.resolve('Database');
+    const db = container.resolve<AnyDb>('Database');
     return new OutboxRepository(db);
-  });
+  }, ['Database']);
   container.register('EventBus', () => {
     const outboxRepo = container.resolve<OutboxRepository>('OutboxRepository');
     const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
     return new EventBus(outboxRepo, schemaRegistry);
-  });
+  }, ['OutboxRepository', 'EventSchemaRegistry']);
   container.register('EventRateLimiter', () => new EventRateLimiter(defaultEventRateLimits));
   container.register('ProcessedEventStore', () => {
-    const db = container.resolve('Database');
+    const db = container.resolve<AnyDb>('Database');
     return new ProcessedEventStore(db);
-  });
+  }, ['Database']);
   container.register('EventConsumer', () => {
     const processedStore = container.resolve<ProcessedEventStore>('ProcessedEventStore');
     const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
@@ -69,13 +86,13 @@ async function bootstrap(): Promise<void> {
       processedStore,
       schemaRegistry,
       rateLimiter,
-      (fn) => (container.resolve('Database') as any).transaction(fn),
+      (fn) => (container.resolve<AnyDb>('Database') as any).transaction(fn),
     );
-  });
+  }, ['ProcessedEventStore', 'EventSchemaRegistry', 'EventRateLimiter', 'Database']);
   container.register('CacheService', () => {
     const redis = container.resolve('Redis');
-    return new CacheService(redis);
-  });
+    return new CacheService(redis as ConstructorParameters<typeof CacheService>[0]);
+  }, ['Redis']);
   container.register('PluginLoader', () => new PluginLoader());
   container.register('ExternalServiceProxy', () => new ExternalServiceProxy());
   container.register('ArchitectureValidator', () => new ArchitectureValidator());
@@ -84,11 +101,11 @@ async function bootstrap(): Promise<void> {
   const validator = container.resolve<ArchitectureValidator>('ArchitectureValidator');
   await validator.validateOnStartup(
     container.getRegisteredTokens(),
-    () => [], // In real impl: resolve actual deps
+    (token) => container.getDependencies(token),
   );
 
   // --- Register modules ---
-  const db = container.resolve('Database');
+  const db = container.resolve<AnyDb>('Database');
   const eventBus = container.resolve<EventBus>('EventBus');
   const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
 
@@ -107,15 +124,27 @@ async function bootstrap(): Promise<void> {
   });
 
   app.get('/health/readiness', async (_req, res) => {
-    // In real implementation: check DB, Redis, RabbitMQ
-    res.json({
-      status: 'ok',
-      checks: [
-        { name: 'database', ok: true },
-        { name: 'redis', ok: true },
-        { name: 'rabbitmq', ok: true },
-      ],
-    });
+    const checks = [];
+
+    // Check database
+    try {
+      await (db as any).execute('SELECT 1');
+      checks.push({ name: 'database', ok: true });
+    } catch {
+      checks.push({ name: 'database', ok: false });
+    }
+
+    // Check redis
+    try {
+      const redisClient = container.resolve<Redis>('Redis');
+      await redisClient.ping();
+      checks.push({ name: 'redis', ok: true });
+    } catch {
+      checks.push({ name: 'redis', ok: false });
+    }
+
+    const allOk = checks.every((c) => c.ok);
+    res.status(allOk ? 200 : 503).json({ status: allOk ? 'ok' : 'degraded', checks });
   });
 
   // --- Global error handler ---

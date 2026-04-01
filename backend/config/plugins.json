@@ -1,0 +1,16 @@
+{
+  "plugins": {
+    "analytics": {
+      "enabled": true,
+      "config": {
+        "trackedEvents": [
+          "product.created.v1",
+          "product.updated.v1",
+          "order.created.v1",
+          "order.completed.v1"
+        ],
+        "retentionDays": 90
+      }
+    }
+  }
+}

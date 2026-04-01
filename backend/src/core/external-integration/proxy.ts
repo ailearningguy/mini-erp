@@ -1,12 +1,6 @@
-import { CircuitBreaker, defaultCircuitBreakerConfigs, type CircuitBreakerConfig } from './circuit-breaker';
-import { PluginGuard, type PluginPermission, type IPlugin } from '@core/plugin-system/plugin-loader';
+import { CircuitBreaker, defaultCircuitBreakerConfigs } from './circuit-breaker';
+import { PluginGuard, type IPlugin } from '@core/plugin-system/plugin-loader';
 import { AppError, ErrorCode } from '@shared/errors';
-
-interface ExternalServiceConfig {
-  url: string;
-  timeoutMs: number;
-  permissions: PluginPermission[];
-}
 
 class ExternalServiceProxy {
   private breakers = new Map<string, CircuitBreaker>();

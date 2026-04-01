@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { SAGA_CONSTANTS } from '@shared/constants';
+import { eq } from 'drizzle-orm';
+import { sagaState } from './saga.schema';
 
 enum SagaStatus {
   PENDING = 'PENDING',
@@ -70,6 +71,7 @@ class SagaOrchestrator {
       compensatedSteps: [],
       context: initialContext as Record<string, unknown>,
       retryCount: 0,
+      lastError: null,
     });
 
     await this.executeSaga(sagaId, definition, initialContext);
@@ -168,52 +170,109 @@ class SagaOrchestrator {
     ]);
   }
 
-  // --- Persistence helpers (use Drizzle in real implementation) ---
+  // --- Persistence helpers (use Drizzle) ---
 
   private async persistState(state: Omit<SagaStateRecord, 'id' | 'startedAt' | 'updatedAt' | 'completedAt' | 'ttlAt'>): Promise<void> {
-    // Insert into saga_state table
-    // In skeleton: delegate to injected db
+    await (this.db as any).insert(sagaState).values({
+      sagaId: state.sagaId,
+      sagaName: state.sagaName,
+      aggregateId: state.aggregateId,
+      status: state.status,
+      currentStep: state.currentStep,
+      completedSteps: JSON.stringify(state.completedSteps),
+      compensatedSteps: JSON.stringify(state.compensatedSteps),
+      context: JSON.stringify(state.context),
+      retryCount: state.retryCount,
+      lastError: state.lastError,
+    });
   }
 
   private async updateStatus(sagaId: string, status: SagaStatus): Promise<void> {
-    // Update saga_state.status
+    await (this.db as any)
+      .update(sagaState)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(sagaState.sagaId, sagaId));
   }
 
   private async updateCurrentStep(sagaId: string, step: number): Promise<void> {
-    // Update saga_state.current_step
+    await (this.db as any)
+      .update(sagaState)
+      .set({ currentStep: step, updatedAt: new Date() })
+      .where(eq(sagaState.sagaId, sagaId));
   }
 
   private async updateCompletedSteps(sagaId: string, steps: string[]): Promise<void> {
-    // Update saga_state.completed_steps
+    await (this.db as any)
+      .update(sagaState)
+      .set({ completedSteps: JSON.stringify(steps), updatedAt: new Date() })
+      .where(eq(sagaState.sagaId, sagaId));
   }
 
   private async updateCompensatedSteps(sagaId: string, steps: string[]): Promise<void> {
-    // Update saga_state.compensated_steps
+    await (this.db as any)
+      .update(sagaState)
+      .set({ compensatedSteps: JSON.stringify(steps), updatedAt: new Date() })
+      .where(eq(sagaState.sagaId, sagaId));
   }
 
   private async updateLastError(sagaId: string, error: string): Promise<void> {
-    // Update saga_state.last_error
+    await (this.db as any)
+      .update(sagaState)
+      .set({ lastError: error, updatedAt: new Date() })
+      .where(eq(sagaState.sagaId, sagaId));
   }
 
   private async updateCompletedAt(sagaId: string): Promise<void> {
-    // Update saga_state.completed_at
+    await (this.db as any)
+      .update(sagaState)
+      .set({ completedAt: new Date(), updatedAt: new Date() })
+      .where(eq(sagaState.sagaId, sagaId));
   }
 
   private async updateRetryCount(sagaId: string, count: number): Promise<void> {
-    // Update saga_state.retry_count
+    await (this.db as any)
+      .update(sagaState)
+      .set({ retryCount: count, updatedAt: new Date() })
+      .where(eq(sagaState.sagaId, sagaId));
   }
 
   private async getState(sagaId: string): Promise<SagaStateRecord | null> {
-    // Query saga_state by saga_id
-    return null;
+    const result = await (this.db as any)
+      .select()
+      .from(sagaState)
+      .where(eq(sagaState.sagaId, sagaId))
+      .limit(1);
+
+    if (!result[0]) return null;
+
+    const row = result[0];
+    return {
+      id: row.id,
+      sagaId: row.sagaId,
+      sagaName: row.sagaName,
+      aggregateId: row.aggregateId,
+      status: row.status,
+      currentStep: row.currentStep,
+      completedSteps: JSON.parse(row.completedSteps || '[]'),
+      compensatedSteps: JSON.parse(row.compensatedSteps || '[]'),
+      context: JSON.parse(row.context || '{}'),
+      retryCount: row.retryCount,
+      lastError: row.lastError,
+      startedAt: row.startedAt,
+      updatedAt: row.updatedAt,
+      completedAt: row.completedAt,
+      ttlAt: row.ttlAt,
+    };
   }
 
   private async getCompletedSteps(sagaId: string): Promise<string[]> {
-    return [];
+    const state = await this.getState(sagaId);
+    return state?.completedSteps ?? [];
   }
 
   private async getCompensatedSteps(sagaId: string): Promise<string[]> {
-    return [];
+    const state = await this.getState(sagaId);
+    return state?.compensatedSteps ?? [];
   }
 }
 

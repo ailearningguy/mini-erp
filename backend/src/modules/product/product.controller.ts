@@ -15,7 +15,7 @@ class ProductController {
       if (!product) {
         throw new AppError(ErrorCode.NOT_FOUND, `Product not found: ${id}`, 404);
       }
-      res.json(successResponse(product, req.id!));
+      res.json(successResponse(product, (req as any).id!));
     } catch (error) {
       next(error);
     }
@@ -31,7 +31,7 @@ class ProductController {
 
       const result = await this.productService.list(limit, cursor);
       res.json(
-        successResponse(result.items, req.id!, {
+        successResponse(result.items, (req as any).id!, {
           cursor: result.nextCursor,
           has_more: result.nextCursor !== null,
           limit,
@@ -46,7 +46,7 @@ class ProductController {
     try {
       const dto = CreateProductDtoSchema.parse(req.body);
       const product = await this.productService.create(dto);
-      res.status(201).json(successResponse(product, req.id!));
+      res.status(201).json(successResponse(product, (req as any).id!));
     } catch (error) {
       next(error);
     }
@@ -57,7 +57,7 @@ class ProductController {
       const { id } = req.params;
       const dto = UpdateProductDtoSchema.parse(req.body);
       const product = await this.productService.update(id, dto);
-      res.json(successResponse(product, req.id!));
+      res.json(successResponse(product, (req as any).id!));
     } catch (error) {
       next(error);
     }

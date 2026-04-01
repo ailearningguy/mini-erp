@@ -1,4 +1,4 @@
-import { SagaOrchestrator, SagaStatus } from '@core/saga/saga-orchestrator';
+import { SagaOrchestrator } from '@core/saga/saga-orchestrator';
 import type { SagaDefinition, ISagaStep } from '@core/saga/saga-orchestrator';
 import { SAGA_CONSTANTS } from '@shared/constants';
 
@@ -67,11 +67,11 @@ const confirmOrderStep: ISagaStep<OrderContext> = {
   name: 'confirm-order',
   timeout: 5000,
   retry: { maxAttempts: 3, backoffMs: 1000, retryableErrors: ['TIMEOUT', 'CONFLICT'] },
-  async execute(ctx: OrderContext): Promise<void> {
+  async execute(_ctx: OrderContext): Promise<void> {
     // Update order status to confirmed
     // await orderService.confirm(ctx.orderId)
   },
-  async compensate(ctx: OrderContext): Promise<void> {
+  async compensate(_ctx: OrderContext): Promise<void> {
     // Revert order status
     // await orderService.cancel(ctx.orderId)
   },

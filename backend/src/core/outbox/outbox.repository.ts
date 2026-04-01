@@ -22,7 +22,7 @@ class OutboxRepository {
     });
   }
 
-  async fetchPending(batchSize = EVENT_CONSTANTS.OUTBOX_BATCH_SIZE): Promise<typeof outbox.$inferSelect[]> {
+  async fetchPending(batchSize: number = EVENT_CONSTANTS.OUTBOX_BATCH_SIZE): Promise<typeof outbox.$inferSelect[]> {
     return (this.db as any)
       .select()
       .from(outbox)

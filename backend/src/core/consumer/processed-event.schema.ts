@@ -1,5 +1,5 @@
 import { pgTable, uuid, timestamp, varchar, index } from 'drizzle-orm/pg-core';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 export const processedEvents = pgTable('processed_events', {
   id: uuid('id').defaultRandom().primaryKey(),

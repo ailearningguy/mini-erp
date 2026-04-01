@@ -2,14 +2,9 @@ import type { EventEnvelope } from '@shared/types/event';
 import { ProcessedEventStore } from './processed-event.schema';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
 import { EventRateLimiter } from '@core/consumer/rate-limiter';
-import { EVENT_CONSTANTS } from '@shared/constants';
 
-type EventHandler = (event: EventEnvelope, tx: unknown) => Promise<void>;
-type DbTransaction = <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
-
-interface AggregateQueue {
-  add(fn: () => Promise<void>): Promise<void>;
-}
+type EventHandler = (event: EventEnvelope, tx: Record<string, unknown>) => Promise<void>;
+type DbTransaction = <T>(fn: (tx: Record<string, unknown>) => Promise<T>) => Promise<T>;
 
 class EventConsumer {
   private handlers = new Map<string, EventHandler>();

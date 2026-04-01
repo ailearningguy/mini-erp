@@ -1,6 +1,15 @@
 import { randomUUID } from 'node:crypto';
+import type { Request, Response, NextFunction } from 'express';
 import { AppError, ErrorCode } from '@shared/errors';
 import { API_CONSTANTS } from '@shared/constants';
+
+declare global {
+  namespace Express {
+    interface Request {
+      id?: string;
+    }
+  }
+}
 
 interface ApiResponse<T> {
   data: T;
@@ -25,28 +34,27 @@ interface ApiErrorResponse {
   };
 }
 
-type ExpressRequest = {
-  id?: string;
-  headers: Record<string, string | undefined>;
-  [key: string]: unknown;
-};
-
-type ExpressResponse = {
-  status(code: number): ExpressResponse;
-  json(body: unknown): void;
-};
-
-type NextFunction = (error?: unknown) => void;
-
-function requestIdMiddleware(req: ExpressRequest, _res: unknown, next: NextFunction): void {
-  req.id = req.headers[API_CONSTANTS.REQUEST_ID_HEADER] ?? randomUUID();
+function requestIdMiddleware(req: Request, _res: Response, next: NextFunction): void {
+  req.id = (req.headers[API_CONSTANTS.REQUEST_ID_HEADER] as string) ?? randomUUID();
   next();
 }
 
-function snakeCaseMiddleware(req: ExpressRequest, _res: unknown, next: NextFunction): void {
+function snakeCaseMiddleware(req: Request, _res: Response, next: NextFunction): void {
   if (req.body && typeof req.body === 'object') {
-    req.body = convertKeys(req.body, camelCase);
+    req.body = convertKeys(req.body as Record<string, unknown>, camelCase);
   }
+  next();
+}
+
+function snakeCaseResponseMiddleware(_req: Request, res: Response, next: NextFunction): void {
+  const originalJson = res.json.bind(res);
+  (res as { json: typeof originalJson }).json = function (body: unknown) {
+    if (body && typeof body === 'object') {
+      const converted = convertKeys(body as Record<string, unknown>, snakeCase);
+      return originalJson(converted);
+    }
+    return originalJson(body);
+  };
   next();
 }
 
@@ -83,7 +91,7 @@ function errorResponse(error: unknown, requestId: string): ApiErrorResponse {
   };
 }
 
-function globalErrorHandler(err: unknown, req: ExpressRequest, res: ExpressResponse, _next: NextFunction): void {
+function globalErrorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   const requestId = req.id ?? 'unknown';
   const response = errorResponse(err, requestId);
 
@@ -128,6 +136,7 @@ function convertKeys(obj: Record<string, unknown>, converter: (key: string) => s
 export {
   requestIdMiddleware,
   snakeCaseMiddleware,
+  snakeCaseResponseMiddleware,
   successResponse,
   errorResponse,
   globalErrorHandler,

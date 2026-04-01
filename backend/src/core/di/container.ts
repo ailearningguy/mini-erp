@@ -1,21 +1,21 @@
-type Constructor<T = unknown> = new (...args: unknown[]) => T;
 type Factory<T = unknown> = () => T;
 
 interface ServiceRegistration<T = unknown> {
   factory: Factory<T>;
   singleton: boolean;
   instance?: T;
+  deps: string[];
 }
 
 class DIContainer {
   private services = new Map<string, ServiceRegistration>();
   private resolving = new Set<string>();
 
-  register<T>(token: string, factory: Factory<T>, singleton = true): void {
+  register<T>(token: string, factory: Factory<T>, deps: string[] = [], singleton = true): void {
     if (this.services.has(token)) {
       throw new Error(`Service already registered: ${token}`);
     }
-    this.services.set(token, { factory, singleton });
+    this.services.set(token, { factory, singleton, deps });
   }
 
   resolve<T>(token: string): T {
@@ -93,6 +93,10 @@ class DIContainer {
 
   getRegisteredTokens(): string[] {
     return [...this.services.keys()];
+  }
+
+  getDependencies(token: string): string[] {
+    return this.services.get(token)?.deps ?? [];
   }
 }
 

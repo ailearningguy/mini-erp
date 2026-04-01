@@ -57,10 +57,24 @@ class AnalyticsPlugin implements IPlugin {
     this.eventHandler = null;
   }
 
+  async onInstall(): Promise<void> {
+    console.log('[AnalyticsPlugin] Installed — schema and tables created');
+  }
+
+  async onUninstall(): Promise<void> {
+    this.events = [];
+    this.eventHandler = null;
+    console.log('[AnalyticsPlugin] Uninstalled — data cleaned up');
+  }
+
   async dispose(): Promise<void> {
     this.eventHandler = null;
     this.events = [];
     console.log('[AnalyticsPlugin] Disposed — resources released');
+  }
+
+  isActive(): boolean {
+    return this.eventHandler !== null;
   }
 
   getEvents(): AnalyticsEventRecord[] {
