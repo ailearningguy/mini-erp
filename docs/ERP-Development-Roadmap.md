@@ -41,7 +41,7 @@ Build a **fully runnable system** with real infrastructure (DB + transaction + e
 
   * `product.created.v1`
   * `product.updated.v1`
-  * `product.deleted.v1`
+  * `product.deactivated.v1` (soft delete, recommended)
 
 ### Infrastructure (Must be real)
 

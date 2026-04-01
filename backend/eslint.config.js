@@ -22,6 +22,13 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/core/**/*.ts'],
+    rules: {
+      'erp-architecture/no-domain-keyword': 'error',
+      'erp-architecture/no-domain-enum': 'error',
+    },
+  },
+  {
     ignores: ['dist/', 'node_modules/', 'database/', 'tests/'],
   },
 );

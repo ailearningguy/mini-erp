@@ -8,7 +8,7 @@ import { DIContainer } from '@core/di/container';
 import { EventBus } from '@core/event-bus/event-bus';
 import { OutboxRepository } from '@core/outbox/outbox.repository';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
-import { EventRateLimiter, defaultEventRateLimits } from '@core/consumer/rate-limiter';
+import { EventRateLimiter } from '@core/consumer/rate-limiter';
 import { ProcessedEventStore } from '@core/consumer/processed-event.schema';
 import { EventConsumer } from '@core/consumer/consumer';
 import { PluginLoader } from '@core/plugin-system/plugin-loader';
@@ -73,7 +73,7 @@ async function bootstrap(): Promise<void> {
     const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
     return new EventBus(outboxRepo, schemaRegistry);
   }, ['OutboxRepository', 'EventSchemaRegistry']);
-  container.register('EventRateLimiter', () => new EventRateLimiter(defaultEventRateLimits));
+  container.register('EventRateLimiter', () => new EventRateLimiter([]));
   container.register('ProcessedEventStore', () => {
     const db = container.resolve<AnyDb>('Database');
     return new ProcessedEventStore(db);

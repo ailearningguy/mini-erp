@@ -1,6 +1,12 @@
 // Custom ESLint rules for architecture enforcement
 // These rules enforce ADR-006: Compile-time architecture validation
 
+const DOMAIN_KEYWORDS = [
+  'product', 'order', 'inventory', 'voucher', 'customer',
+  'wallet', 'loyalty', 'payment', 'shipping', 'supplier',
+  'category', 'brand', 'attribute', 'variant', 'bundle',
+];
+
 const RULES = {
   'no-cross-module-import': {
     meta: {
@@ -44,10 +50,16 @@ const RULES = {
       return {
         ImportDeclaration(node) {
           const importPath = node.source.value;
-          if (importPath.includes('.repository') || importPath.includes('.schema')) {
+          if (importPath.includes('.repository')) {
             context.report({
               node,
-              message: 'Plugins cannot import repositories or schemas. Use service interfaces instead.',
+              message: 'Plugins cannot import repositories. Use service interfaces instead.',
+            });
+          }
+          if (importPath.includes('/modules/') && importPath.includes('.schema')) {
+            context.report({
+              node,
+              message: 'Plugins cannot import module schemas. Use service interfaces or plugin-scoped isolated storage.',
             });
           }
         },
@@ -162,6 +174,69 @@ const RULES = {
               node,
               message: 'Modules cannot import from plugins. Use service interfaces and events instead.',
             });
+          }
+        },
+      };
+    },
+  },
+
+  'no-domain-keyword': {
+    meta: {
+      type: 'problem',
+      docs: { description: 'Forbid domain keywords in core' },
+      schema: [],
+    },
+    create(context) {
+      const filename = context.getFilename();
+      if (!filename.includes('/src/core/')) return {};
+
+      const hasDomainSuffix = (name) => {
+        const suffixes = ['Id', 'Name', 'Status', 'Service', 'Repository', 'Controller', 'Module', 'Event', 'Schema', 'By'];
+        return suffixes.some(s => name.toLowerCase().endsWith(s.toLowerCase()));
+      };
+
+      return {
+        'Identifier[name]'(node) {
+          const name = node.name.toLowerCase();
+          for (const kw of DOMAIN_KEYWORDS) {
+            if (name === kw || (name.startsWith(kw) && name.length > kw.length && /[A-Z]/.test(name[kw.length]))) {
+              if (hasDomainSuffix(node.name)) continue;
+              context.report({
+                node,
+                message: `Domain keyword "${kw}" is not allowed in core`,
+              });
+              break;
+            }
+          }
+        },
+      };
+    },
+  },
+
+  'no-domain-enum': {
+    meta: {
+      type: 'problem',
+      docs: { description: 'Forbid domain enums in core' },
+      schema: [],
+    },
+    create(context) {
+      const filename = context.getFilename();
+      if (!filename.includes('/src/core/')) return {};
+
+      return {
+        TSEnumDeclaration(node) {
+          const members = node.members || [];
+          for (const member of members) {
+            const name = member.id?.name?.toLowerCase() || '';
+            for (const kw of DOMAIN_KEYWORDS) {
+              if (name.includes(kw)) {
+                context.report({
+                  node,
+                  message: `Domain enum containing "${kw}" is not allowed in core`,
+                });
+                break;
+              }
+            }
           }
         },
       };

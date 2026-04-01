@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "amqplib": "^0.10.4",
-    "drizzle-orm": "^0.35.0",
+    "drizzle-orm": "^0.45.2",
     "express": "^4.21.0",
     "helmet": "^8.0.0",
     "ioredis": "^5.4.0",

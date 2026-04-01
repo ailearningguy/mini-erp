@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 export enum MetricType {
   COUNTER = 'counter',
   GAUGE = 'gauge',

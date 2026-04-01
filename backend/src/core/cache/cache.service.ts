@@ -120,11 +120,5 @@ class CacheService {
   }
 }
 
-const cacheDefaults: Record<string, CacheConfig> = {
-  product: { ttl: 300, strategy: 'cache-aside', invalidation: 'event-driven' },
-  user: { ttl: 60, strategy: 'cache-aside', invalidation: 'event-driven' },
-  config: { ttl: 3600, strategy: 'write-through', invalidation: 'event-driven' },
-};
-
-export { CacheService, cacheDefaults };
+export { CacheService };
 export type { CacheConfig };

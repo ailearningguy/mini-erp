@@ -53,10 +53,5 @@ class EventRateLimiter {
   }
 }
 
-const defaultEventRateLimits: RateLimitConfig[] = [
-  { eventType: 'order.created', maxEventsPerSecond: 100, burstAllowance: 150 },
-  { eventType: 'product.created', maxEventsPerSecond: 500, burstAllowance: 750 },
-  { eventType: 'inventory.reserved', maxEventsPerSecond: 200, burstAllowance: 300 },
-];
-
-export { EventRateLimiter, TokenBucket, defaultEventRateLimits };
+export { EventRateLimiter, TokenBucket };
+export type { RateLimitConfig };
