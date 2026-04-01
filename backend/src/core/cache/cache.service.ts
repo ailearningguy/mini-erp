@@ -1,5 +1,21 @@
 import { CACHE_CONSTANTS } from '@shared/constants';
 
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+interface CacheLogger {
+  log(level: LogLevel, message: string, meta?: Record<string, unknown>): void;
+}
+
+interface CacheMetrics {
+  increment(metric: string, value?: number): void;
+  timing(metric: string, durationMs: number): void;
+}
+
+interface CacheHooks {
+  logger?: CacheLogger;
+  metrics?: CacheMetrics;
+}
+
 interface RedisClient {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, mode: string, duration: number): Promise<'OK' | null>;
@@ -13,34 +29,63 @@ interface CacheConfig {
   invalidation: 'event-driven' | 'ttl-only';
 }
 
+const NOOP_HOOKS: CacheHooks = {};
+
 class CacheService {
   private mutexes = new Map<string, Promise<unknown>>();
+  private hits = 0;
+  private misses = 0;
 
-  constructor(private readonly redis: RedisClient) {}
+  constructor(
+    private readonly redis: RedisClient,
+    private readonly hooks: CacheHooks = NOOP_HOOKS,
+  ) {}
 
   async get<T>(key: string): Promise<T | null> {
+    const start = Date.now();
     try {
       const data = await this.redis.get(`cache:${key}`);
-      if (!data) return null;
+      if (!data) {
+        this.misses++;
+        this.hooks.metrics?.increment('cache.miss');
+        this.hooks.logger?.log('debug', 'Cache miss', { key, cacheKey: `cache:${key}` });
+        return null;
+      }
+      this.hits++;
+      this.hooks.metrics?.increment('cache.hit');
+      this.hooks.logger?.log('debug', 'Cache hit', { key, cacheKey: `cache:${key}` });
       return JSON.parse(data) as T;
-    } catch {
+    } catch (error) {
+      this.hooks.logger?.log('error', 'Cache get error', { key, error: String(error) });
       return null;
+    } finally {
+      this.hooks.metrics?.timing('cache.get.duration', Date.now() - start);
     }
   }
 
   async set<T>(key: string, value: T, ttl: number = CACHE_CONSTANTS.DEFAULT_TTL_SECONDS): Promise<void> {
+    const start = Date.now();
     try {
       await this.redis.set(`cache:${key}`, JSON.stringify(value), 'EX', ttl);
-    } catch {
-      // Fail-safe: cache write failure should not break the application
+      this.hooks.metrics?.increment('cache.set');
+      this.hooks.logger?.log('debug', 'Cache set', { key, ttl });
+    } catch (error) {
+      this.hooks.logger?.log('error', 'Cache set error', { key, error: String(error) });
+    } finally {
+      this.hooks.metrics?.timing('cache.set.duration', Date.now() - start);
     }
   }
 
   async invalidate(key: string): Promise<void> {
+    const start = Date.now();
     try {
       await this.redis.del(`cache:${key}`);
-    } catch {
-      // Fail-safe: cache invalidation failure should not break the application
+      this.hooks.metrics?.increment('cache.invalidate');
+      this.hooks.logger?.log('debug', 'Cache invalidated', { key });
+    } catch (error) {
+      this.hooks.logger?.log('error', 'Cache invalidate error', { key, error: String(error) });
+    } finally {
+      this.hooks.metrics?.timing('cache.invalidate.duration', Date.now() - start);
     }
   }
 
@@ -107,18 +152,28 @@ class CacheService {
     dbFactory: () => Promise<T>,
     ttl: number = CACHE_CONSTANTS.DEFAULT_TTL_SECONDS,
   ): Promise<T> {
-    try {
-      const cached = await this.get<T>(key);
-      if (cached !== null) return cached;
-    } catch {
-      // Fail-safe: cache read failure — fallback to DB
-    }
+    const cached = await this.get<T>(key);
+    if (cached !== null) return cached;
 
     const result = await dbFactory();
     await this.set(key, result, ttl);
     return result;
   }
+
+  getStats(): { hits: number; misses: number; hitRate: number } {
+    const total = this.hits + this.misses;
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      hitRate: total > 0 ? this.hits / total : 0,
+    };
+  }
+
+  resetStats(): void {
+    this.hits = 0;
+    this.misses = 0;
+  }
 }
 
 export { CacheService };
-export type { CacheConfig };
+export type { CacheConfig, CacheHooks, CacheLogger, CacheMetrics, LogLevel };
