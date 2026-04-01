@@ -77,6 +77,39 @@ describe('ProductService', () => {
     });
   });
 
+  describe('update', () => {
+    it('should read product inside transaction to prevent TOCTOU race', async () => {
+      mockDb._mockResult.length = 0;
+      const mockTx = mockDb._mockTx;
+      mockTx.select = jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            limit: jest.fn(async () => [{ id: '1', productName: 'Test', sku: 'T1', basePrice: '10.00', stock: 5, version: 1 }]),
+          })),
+        })),
+      }));
+
+      await service.update('1', { productName: 'Updated', version: 1 } as any);
+
+      expect(mockDb._mockTx.select).toHaveBeenCalled();
+    });
+
+    it('should throw CONFLICT when version mismatch inside transaction', async () => {
+      mockDb._mockResult.length = 0;
+      mockDb._mockTx.select = jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            limit: jest.fn(async () => [{ id: '1', version: 2 }]),
+          })),
+        })),
+      }));
+
+      await expect(
+        service.update('1', { productName: 'Updated', version: 1 } as any),
+      ).rejects.toThrow(/version/i);
+    });
+  });
+
   describe('delete', () => {
     it('should throw NOT_FOUND when product does not exist', async () => {
       mockDb._mockResult.length = 0;

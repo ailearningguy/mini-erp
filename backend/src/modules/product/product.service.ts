@@ -100,20 +100,6 @@ class ProductService implements IProductService {
   }
 
   async update(id: string, dto: UpdateProductDto): Promise<Product> {
-    const existing = await this.getById(id);
-    if (!existing) {
-      throw new AppError(ErrorCode.NOT_FOUND, `Product not found: ${id}`, 404);
-    }
-
-    if (existing.version !== dto.version) {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        'Version conflict — product has been modified by another request',
-        409,
-        { expectedVersion: dto.version, actualVersion: existing.version },
-      );
-    }
-
     const changes: Record<string, unknown> = {};
     if (dto.productName !== undefined) changes.productName = dto.productName;
     if (dto.basePrice !== undefined) changes.basePrice = dto.basePrice.toString();
@@ -122,6 +108,27 @@ class ProductService implements IProductService {
 
     const result = await (this.db as any).transaction(async (tx_: AnyDb) => {
       const tx = tx_ as any;
+
+      const existingRows = await tx
+        .select()
+        .from(products)
+        .where(eq(products.id, id))
+        .limit(1);
+
+      const existing = existingRows[0];
+      if (!existing) {
+        throw new AppError(ErrorCode.NOT_FOUND, `Product not found: ${id}`, 404);
+      }
+
+      if (existing.version !== dto.version) {
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          'Version conflict — product has been modified by another request',
+          409,
+          { expectedVersion: dto.version, actualVersion: existing.version },
+        );
+      }
+
       await tx
         .update(products)
         .set({
