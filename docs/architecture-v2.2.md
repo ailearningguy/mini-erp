@@ -422,7 +422,7 @@ Plugins (Extensions)
 
 | Layer | Responsibility |
 |-------|----------------|
-| Core | DI, Plugin Loader, Event Bus, Config, Security, Architecture Enforcement |
+| Core | DI, Plugin Loader, Event Bus, Config, Security, Cache Abstraction, Transaction Management, Architecture Enforcement |
 | Module | Domain logic + DB ownership |
 | Plugin | Extend behavior via API + events |
 
@@ -3205,22 +3205,31 @@ Before deploying:
 
 | Rule | Severity | Description |
 |------|----------|-------------|
-| `no-cross-module-import` | **error** | Module A cannot import Module B directly |
+| `no-cross-module-import` | **error** | Core must not import from modules or plugins |
 | `no-outbox-direct-access` | **error** | Only core/outbox module can access outbox table |
 | `no-repository-in-plugin` | **error** | Plugin cannot inject repository |
 | `no-core-event-from-plugin` | **error** | Plugin cannot emit core domain events |
 | `no-infra-config-import` | **error** | Cannot import docker-compose, k8s, terraform configs |
+| `no-domain-keyword` | **error** | Domain keywords not allowed in core |
+| `no-domain-enum` | **error** | Domain enums not allowed in core (infrastructure enums OK) |
 
 ```javascript
 // eslint.config.js
+import erpPlugin from './scripts/eslint-plugin-erp.js';
+
 module.exports = {
+  plugins: { erp: erpPlugin },
   rules: {
     'erp/no-cross-module-import': 'error',
     'erp/no-outbox-direct-access': 'error',
     'erp/no-repository-in-plugin': 'error',
     'erp/no-core-event-from-plugin': 'error',
+    'erp/no-infra-config-import': 'error',
   },
 };
+
+// For src/core/**/*.ts — add:
+{ files: ['src/core/**/*.ts'], rules: { 'erp/no-domain-keyword': 'error', 'erp/no-domain-enum': 'error' } }
 ```
 
 ## Runtime (Startup Validation)
@@ -3228,9 +3237,11 @@ module.exports = {
 ```typescript
 class ArchitectureValidator {
   async validateOnStartup(): Promise<void> {
-    await this.validateDIGraph();      // Circular dependency detection
-    await this.validatePluginGuards();  // Permission manifest vs actual usage
-    await this.validateServiceInterfaces(); // Interface contracts match implementations
+    await this.validateDIGraph();            // Circular dependency detection
+    await this.validateNoCoreToModule();     // Core must not depend on modules
+    await this.validateNoCoreToPlugin();     // Core must not depend on plugins
+    await this.validatePluginGuards();       // Permission manifest vs actual usage
+    await this.validateServiceInterfaces();  // Interface contracts match implementations
   }
 
   private async validateDIGraph(): Promise<void> {
@@ -3238,6 +3249,26 @@ class ArchitectureValidator {
     const cycles = detectCycles(graph);
     if (cycles.length > 0) {
       throw new Error(`Circular dependencies detected: ${cycles.join(', ')}`);
+    }
+  }
+
+  private async validateNoCoreToModule(): Promise<void> {
+    const graph = this.container.getDependencyGraph();
+    const violations = graph.edges.filter(e =>
+      e.from.startsWith('core') && e.to.startsWith('modules')
+    );
+    if (violations.length) {
+      throw new Error('Core must not depend on modules');
+    }
+  }
+
+  private async validateNoCoreToPlugin(): Promise<void> {
+    const graph = this.container.getDependencyGraph();
+    const violations = graph.edges.filter(e =>
+      e.from.startsWith('core') && e.to.startsWith('plugins')
+    );
+    if (violations.length) {
+      throw new Error('Core must not depend on plugins');
     }
   }
 }
@@ -3252,11 +3283,11 @@ All architecture rules run in CI as blocking checks:
 jobs:
   architecture-check:
     steps:
-      - run: npm run lint          # ESLint rules (compile-time)
-      - run: npm run typecheck     # TypeScript strict
-      - run: npm run test          # Unit + integration
-      - run: npm run lint:spec     # OpenAPI spec validation
-      - run: npm run lint:migration # Migration linter (ADR-009, v2.2)
+      - run: npm run lint:arch        # ESLint architecture rules (compile-time)
+      - run: npm run typecheck         # TypeScript strict
+      - run: npm run test              # Unit + integration
+      - run: npm run lint:spec         # OpenAPI spec validation
+      - run: npm run lint:migration    # Migration linter (ADR-009, v2.2)
 ```
 
 ---
