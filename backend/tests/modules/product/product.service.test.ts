@@ -51,6 +51,70 @@ describe('ProductService', () => {
     });
   });
 
+  describe('list with cursor pagination', () => {
+    it('should filter by cursor when provided', async () => {
+      mockDb._mockResult.length = 0;
+
+      let capturedWhereCondition: any = null;
+      mockDb.select = jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn((condition: any) => {
+            capturedWhereCondition = condition;
+            return {
+              limit: jest.fn(async () => [
+                { id: 'prod-2', productName: 'B', sku: 'B', isActive: true },
+                { id: 'prod-3', productName: 'C', sku: 'C', isActive: true },
+              ]),
+            };
+          }),
+        })),
+      })) as any;
+
+      const result = await service.list(10, 'prod-1');
+
+      expect(capturedWhereCondition).not.toBeNull();
+      expect(result.items).toHaveLength(2);
+      expect(result.items[0].id).toBe('prod-2');
+    });
+
+    it('should return nextCursor when more items exist', async () => {
+      mockDb._mockResult.length = 0;
+      mockDb.select = jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            limit: jest.fn(async () => [
+              { id: 'prod-1', productName: 'A', sku: 'A', isActive: true },
+              { id: 'prod-2', productName: 'B', sku: 'B', isActive: true },
+              { id: 'prod-3', productName: 'C', sku: 'C', isActive: true },
+            ]),
+          })),
+        })),
+      })) as any;
+
+      const result = await service.list(2);
+
+      expect(result.items).toHaveLength(2);
+      expect(result.nextCursor).toBe('prod-2');
+    });
+
+    it('should return null nextCursor when no more items', async () => {
+      mockDb._mockResult.length = 0;
+      mockDb.select = jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            limit: jest.fn(async () => [
+              { id: 'prod-1', productName: 'A', sku: 'A', isActive: true },
+            ]),
+          })),
+        })),
+      })) as any;
+
+      const result = await service.list(10);
+
+      expect(result.nextCursor).toBeNull();
+    });
+  });
+
   describe('create', () => {
     it('should throw CONFLICT when SKU already exists', async () => {
       mockDb._mockResult.push({ id: '1', sku: 'EXISTING' });

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, and, gt } from 'drizzle-orm';
 import { products } from './product.schema';
 import type { CreateProductDto, UpdateProductDto } from './dto/create-product.dto';
 import type { IProductService, Product } from './interfaces/product.service.interface';
@@ -32,14 +32,19 @@ class ProductService implements IProductService {
     return result[0] ?? null;
   }
 
-  async list(limit: number, _cursor?: string): Promise<{ items: Product[]; nextCursor: string | null }> {
-    const query = (this.db as any)
+  async list(limit: number, cursor?: string): Promise<{ items: Product[]; nextCursor: string | null }> {
+    const conditions = [eq(products.isActive, true)];
+
+    if (cursor) {
+      conditions.push(gt(products.id, cursor));
+    }
+
+    const result = await (this.db as any)
       .select()
       .from(products)
-      .where(eq(products.isActive, true))
+      .where(and(...conditions))
       .limit(limit + 1);
 
-    const result = await query;
     const hasMore = result.length > limit;
     const items = hasMore ? result.slice(0, limit) : result;
     const nextCursor = hasMore ? items[items.length - 1].id : null;
