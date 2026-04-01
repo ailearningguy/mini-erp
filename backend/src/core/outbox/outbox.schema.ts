@@ -10,7 +10,7 @@ export const outbox = pgTable('outbox', {
   metadata: jsonb('metadata'),
   status: varchar('status', { length: 50 }).default('pending').notNull(),
   attempts: integer('attempts').default(0).notNull(),
-  nextAttemptAt: timestamp('next_attempt_at'),
+  nextAttemptAt: timestamp('next_attempt_at').defaultNow().notNull(),
   lockedAt: timestamp('locked_at'),
   lockedBy: varchar('locked_by', { length: 255 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),

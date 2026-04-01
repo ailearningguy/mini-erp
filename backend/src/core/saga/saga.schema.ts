@@ -12,8 +12,8 @@ export const sagaState = pgTable('saga_state', {
   context: jsonb('context').notNull(),
   retryCount: integer('retry_count').notNull().default(0),
   lastError: text('last_error'),
-  startedAt: timestamp('started_at').notNull(),
-  updatedAt: timestamp('updated_at').notNull(),
+  startedAt: timestamp('started_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
   completedAt: timestamp('completed_at'),
   ttlAt: timestamp('ttl_at'),
 }, (table) => ({
