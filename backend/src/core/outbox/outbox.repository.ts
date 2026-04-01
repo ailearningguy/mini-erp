@@ -8,9 +8,11 @@ type AnyDb = Record<string, unknown>;
 class OutboxRepository {
   constructor(private readonly db: AnyDb) {}
 
-  async insert(event: EventEnvelope, tx?: AnyDb): Promise<void> {
-    const db = (tx ?? this.db) as any;
-    await db.insert(outbox).values({
+  async insert(event: EventEnvelope, tx: AnyDb): Promise<void> {
+    if (!tx) {
+      throw new Error('OutboxRepository.insert() requires a transaction. Events MUST be written within the same transaction as domain data.');
+    }
+    await (tx as any).insert(outbox).values({
       eventId: event.id,
       eventType: event.type,
       source: event.source,
