@@ -166,13 +166,20 @@ class ProductService implements IProductService {
   }
 
   async delete(id: string): Promise<void> {
-    const existing = await this.getById(id);
-    if (!existing) {
-      throw new AppError(ErrorCode.NOT_FOUND, `Product not found: ${id}`, 404);
-    }
-
     await (this.db as any).transaction(async (tx_: AnyDb) => {
       const tx = tx_ as any;
+
+      const existingRows = await tx
+        .select()
+        .from(products)
+        .where(eq(products.id, id))
+        .limit(1);
+
+      const existing = existingRows[0];
+      if (!existing) {
+        throw new AppError(ErrorCode.NOT_FOUND, `Product not found: ${id}`, 404);
+      }
+
       await tx
         .update(products)
         .set({ isActive: false, updatedAt: new Date() })

@@ -113,8 +113,54 @@ describe('ProductService', () => {
   });
 
   describe('delete', () => {
+    it('should read product INSIDE transaction to prevent TOCTOU race', async () => {
+      mockDb._mockResult.length = 0;
+
+      let selectCalledOnTx = false;
+      const mockTx = mockDb._mockTx;
+      mockTx.select = jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            limit: jest.fn(async () => {
+              selectCalledOnTx = true;
+              return [{ id: '1', productName: 'Test', sku: 'T1', isActive: true }];
+            }),
+          })),
+        })),
+      }));
+
+      mockDb._mockResult.push({ id: '1', productName: 'Test', sku: 'T1', isActive: true });
+
+      await service.delete('1');
+
+      expect(selectCalledOnTx).toBe(true);
+    });
+
+    it('should throw NOT_FOUND when product is deleted by concurrent request inside transaction', async () => {
+      mockDb._mockResult.length = 0;
+
+      mockDb._mockResult.push({ id: '1', productName: 'Test', sku: 'T1', isActive: true });
+
+      mockDb._mockTx.select = jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            limit: jest.fn(async () => []),
+          })),
+        })),
+      }));
+
+      await expect(service.delete('1')).rejects.toThrow(/not found/i);
+    });
+
     it('should throw NOT_FOUND when product does not exist', async () => {
       mockDb._mockResult.length = 0;
+      mockDb._mockTx.select = jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            limit: jest.fn(async () => []),
+          })),
+        })),
+      }));
       await expect(service.delete('nonexistent')).rejects.toThrow(AppError);
     });
 
