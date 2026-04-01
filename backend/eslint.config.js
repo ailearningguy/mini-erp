@@ -18,6 +18,7 @@ export default tseslint.config(
       'erp-architecture/no-core-event-from-plugin': 'error',
       'erp-architecture/no-outbox-direct-access': 'error',
       'erp-architecture/no-infra-config-import': 'error',
+      'erp-architecture/no-plugin-import-from-module': 'error',
     },
   },
   {

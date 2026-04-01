@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, varchar, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, varchar } from 'drizzle-orm/pg-core';
 import { eq } from 'drizzle-orm';
 
 export const processedEvents = pgTable('processed_events', {
@@ -6,9 +6,7 @@ export const processedEvents = pgTable('processed_events', {
   eventId: uuid('event_id').notNull().unique(),
   eventType: varchar('event_type', { length: 255 }).notNull(),
   processedAt: timestamp('processed_at').defaultNow().notNull(),
-}, (table) => ({
-  eventIdIdx: index('processed_events_event_id_idx').on(table.eventId),
-}));
+});
 
 type AnyDb = Record<string, unknown>;
 

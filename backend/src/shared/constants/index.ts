@@ -56,5 +56,3 @@ export const CACHE_CONSTANTS = {
   LOCK_RETRY_DELAY_MS: 100,
   LOCK_TTL_MS: 5000,
 } as const;
-
-export { ErrorCode } from '@shared/errors/app-error';

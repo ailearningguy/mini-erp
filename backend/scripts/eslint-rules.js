@@ -138,6 +138,35 @@ const RULES = {
       };
     },
   },
+
+  'no-plugin-import-from-module': {
+    meta: {
+      type: 'problem',
+      docs: { description: 'Prevent modules from importing plugin internals' },
+      schema: [],
+    },
+    create(context) {
+      const filename = context.getFilename();
+      const isModuleFile = filename.includes('/src/modules/');
+      const isPluginFile = filename.includes('/src/plugins/');
+
+      if (!isModuleFile || isPluginFile) {
+        return {};
+      }
+
+      return {
+        ImportDeclaration(node) {
+          const source = node.source.value;
+          if (typeof source === 'string' && (source.startsWith('@plugins/') || source.includes('/plugins/'))) {
+            context.report({
+              node,
+              message: 'Modules cannot import from plugins. Use service interfaces and events instead.',
+            });
+          }
+        },
+      };
+    },
+  },
 };
 
 export default RULES;
