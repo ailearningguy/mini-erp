@@ -129,8 +129,14 @@ async function bootstrap(): Promise<void> {
   // --- Register plugins ---
   const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
   const analyticsPlugin = new AnalyticsPlugin();
+  analyticsPlugin.init(db);
   await pluginLoader.register(analyticsPlugin);
   await pluginLoader.activate('analytics');
+
+  const analyticsModule = analyticsPlugin.getModule();
+  if (analyticsModule) {
+    analyticsModule.registerRoutes(app);
+  }
 
   const eventConsumer = container.resolve<EventConsumer>('EventConsumer');
   analyticsPlugin.setEventConsumer(eventConsumer);
