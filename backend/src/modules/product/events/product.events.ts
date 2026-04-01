@@ -38,9 +38,9 @@ export const ProductUpdatedEventSchema = z.object({
 
 export type ProductUpdatedEvent = z.infer<typeof ProductUpdatedEventSchema>;
 
-export const ProductDeletedEventSchema = z.object({
+export const ProductDeactivatedEventSchema = z.object({
   id: z.string().uuid(),
-  type: z.literal('product.deleted.v1'),
+  type: z.literal('product.deactivated.v1'),
   source: z.string(),
   timestamp: z.string().datetime(),
   aggregate_id: z.string().uuid(),
@@ -54,4 +54,8 @@ export const ProductDeletedEventSchema = z.object({
   }),
 });
 
-export type ProductDeletedEvent = z.infer<typeof ProductDeletedEventSchema>;
+export type ProductDeactivatedEvent = z.infer<typeof ProductDeactivatedEventSchema>;
+
+/** @deprecated Use ProductDeactivatedEventSchema */
+export const ProductDeletedEventSchema = ProductDeactivatedEventSchema;
+export type ProductDeletedEvent = ProductDeactivatedEvent;

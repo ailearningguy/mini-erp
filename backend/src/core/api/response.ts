@@ -113,11 +113,17 @@ function snakeCase(str: string): string {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
 
-function convertKeys(obj: Record<string, unknown>, converter: (key: string) => string): Record<string, unknown> {
+const SKIP_CONVERSION_KEYS = new Set(['payload']);
+
+function convertKeys(
+  obj: Record<string, unknown>,
+  converter: (key: string) => string,
+  skipKeys: Set<string> = SKIP_CONVERSION_KEYS,
+): Record<string, unknown> {
   if (Array.isArray(obj)) {
     return obj.map((item) =>
       typeof item === 'object' && item !== null
-        ? convertKeys(item as Record<string, unknown>, converter)
+        ? convertKeys(item as Record<string, unknown>, converter, skipKeys)
         : item,
     ) as unknown as Record<string, unknown>;
   }
@@ -125,10 +131,15 @@ function convertKeys(obj: Record<string, unknown>, converter: (key: string) => s
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     const newKey = converter(key);
-    result[newKey] =
-      typeof value === 'object' && value !== null
-        ? convertKeys(value as Record<string, unknown>, converter)
-        : value;
+    if (typeof value === 'object' && value !== null) {
+      if (skipKeys.has(key)) {
+        result[newKey] = value;
+      } else {
+        result[newKey] = convertKeys(value as Record<string, unknown>, converter, skipKeys);
+      }
+    } else {
+      result[newKey] = value;
+    }
   }
   return result;
 }

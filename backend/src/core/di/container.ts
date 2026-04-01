@@ -62,14 +62,14 @@ class DIContainer {
       visiting.add(token);
       path.push(token);
 
-      // Attempt resolution to detect cycles
-      try {
-        const reg = this.services.get(token);
-        if (reg) {
-          reg.factory();
+      const reg = this.services.get(token);
+      if (reg) {
+        for (const dep of reg.deps) {
+          if (!this.services.has(dep)) {
+            throw new Error(`Dependency "${dep}" not registered (required by "${token}")`);
+          }
+          visit(dep, [...path]);
         }
-      } catch {
-        // Factory may fail during validation — that's OK, we're checking for cycles
       }
 
       path.pop();

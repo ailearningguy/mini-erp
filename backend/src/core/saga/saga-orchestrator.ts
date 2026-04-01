@@ -84,11 +84,11 @@ class SagaOrchestrator {
     definition: SagaDefinition<TContext>,
     context: TContext,
   ): Promise<void> {
-    await this.updateStatus(sagaId, SagaStatus.RUNNING);
+    await this.updateSagaState(sagaId, { status: SagaStatus.RUNNING });
 
     for (let i = 0; i < definition.steps.length; i++) {
       const step = definition.steps[i];
-      await this.updateCurrentStep(sagaId, i);
+      const completedSteps = await this.getCompletedSteps(sagaId);
 
       try {
         await this.executeWithTimeout(
@@ -97,19 +97,20 @@ class SagaOrchestrator {
           `Step ${step.name} timed out after ${step.timeout}ms`,
         );
 
-        const completedSteps = await this.getCompletedSteps(sagaId);
         completedSteps.push(step.name);
-        await this.updateCompletedSteps(sagaId, completedSteps);
+        await this.updateSagaState(sagaId, { currentStep: i, completedSteps });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        await this.updateLastError(sagaId, message);
+        await this.updateSagaState(sagaId, { lastError: message });
         await this.compensate(sagaId, definition, context, i);
         return;
       }
     }
 
-    await this.updateStatus(sagaId, SagaStatus.COMPLETED);
-    await this.updateCompletedAt(sagaId);
+    await this.updateSagaState(sagaId, {
+      status: SagaStatus.COMPLETED,
+      completedAt: new Date(),
+    });
   }
 
   private async compensate<TContext>(
@@ -118,7 +119,7 @@ class SagaOrchestrator {
     context: TContext,
     failedStepIndex: number,
   ): Promise<void> {
-    await this.updateStatus(sagaId, SagaStatus.COMPENSATING);
+    await this.updateSagaState(sagaId, { status: SagaStatus.COMPENSATING });
 
     for (let i = failedStepIndex - 1; i >= 0; i--) {
       const step = definition.steps[i];
@@ -131,16 +132,15 @@ class SagaOrchestrator {
 
         const compensatedSteps = await this.getCompensatedSteps(sagaId);
         compensatedSteps.push(step.name);
-        await this.updateCompensatedSteps(sagaId, compensatedSteps);
+        await this.updateSagaState(sagaId, { compensatedSteps });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        await this.updateLastError(sagaId, message);
-        await this.updateStatus(sagaId, SagaStatus.FAILED);
+        await this.updateSagaState(sagaId, { lastError: message, status: SagaStatus.FAILED });
         return;
       }
     }
 
-    await this.updateStatus(sagaId, SagaStatus.COMPLETED);
+    await this.updateSagaState(sagaId, { status: SagaStatus.COMPLETED });
   }
 
   async retrySaga(sagaId: string, definition: SagaDefinition): Promise<void> {
@@ -153,7 +153,7 @@ class SagaOrchestrator {
       throw new Error(`Saga ${sagaId} exceeded max retries (${definition.maxRetries})`);
     }
 
-    await this.updateRetryCount(sagaId, state.retryCount + 1);
+    await this.updateSagaState(sagaId, { retryCount: state.retryCount + 1 });
     await this.executeSaga(sagaId, definition, state.context as any);
   }
 
@@ -172,6 +172,10 @@ class SagaOrchestrator {
 
   // --- Persistence helpers (use Drizzle) ---
 
+  private async withTransaction<T>(fn: (tx: AnyDb) => Promise<T>): Promise<T> {
+    return (this.db as any).transaction(fn);
+  }
+
   private async persistState(state: Omit<SagaStateRecord, 'id' | 'startedAt' | 'updatedAt' | 'completedAt' | 'ttlAt'>): Promise<void> {
     await (this.db as any).insert(sagaState).values({
       sagaId: state.sagaId,
@@ -187,53 +191,35 @@ class SagaOrchestrator {
     });
   }
 
-  private async updateStatus(sagaId: string, status: SagaStatus): Promise<void> {
-    await (this.db as any)
-      .update(sagaState)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(sagaState.sagaId, sagaId));
-  }
+  private async updateSagaState(
+    sagaId: string,
+    updates: Partial<{
+      status: SagaStatus;
+      currentStep: number;
+      completedSteps: string[];
+      compensatedSteps: string[];
+      lastError: string | null;
+      completedAt: Date | null;
+      retryCount: number;
+    }>,
+  ): Promise<void> {
+    await this.withTransaction(async (tx_) => {
+      const tx = tx_ as any;
+      const setValues: Record<string, unknown> = { updatedAt: new Date() };
 
-  private async updateCurrentStep(sagaId: string, step: number): Promise<void> {
-    await (this.db as any)
-      .update(sagaState)
-      .set({ currentStep: step, updatedAt: new Date() })
-      .where(eq(sagaState.sagaId, sagaId));
-  }
+      if (updates.status !== undefined) setValues.status = updates.status;
+      if (updates.currentStep !== undefined) setValues.currentStep = updates.currentStep;
+      if (updates.completedSteps !== undefined) setValues.completedSteps = JSON.stringify(updates.completedSteps);
+      if (updates.compensatedSteps !== undefined) setValues.compensatedSteps = JSON.stringify(updates.compensatedSteps);
+      if (updates.lastError !== undefined) setValues.lastError = updates.lastError;
+      if (updates.completedAt !== undefined) setValues.completedAt = updates.completedAt;
+      if (updates.retryCount !== undefined) setValues.retryCount = updates.retryCount;
 
-  private async updateCompletedSteps(sagaId: string, steps: string[]): Promise<void> {
-    await (this.db as any)
-      .update(sagaState)
-      .set({ completedSteps: JSON.stringify(steps), updatedAt: new Date() })
-      .where(eq(sagaState.sagaId, sagaId));
-  }
-
-  private async updateCompensatedSteps(sagaId: string, steps: string[]): Promise<void> {
-    await (this.db as any)
-      .update(sagaState)
-      .set({ compensatedSteps: JSON.stringify(steps), updatedAt: new Date() })
-      .where(eq(sagaState.sagaId, sagaId));
-  }
-
-  private async updateLastError(sagaId: string, error: string): Promise<void> {
-    await (this.db as any)
-      .update(sagaState)
-      .set({ lastError: error, updatedAt: new Date() })
-      .where(eq(sagaState.sagaId, sagaId));
-  }
-
-  private async updateCompletedAt(sagaId: string): Promise<void> {
-    await (this.db as any)
-      .update(sagaState)
-      .set({ completedAt: new Date(), updatedAt: new Date() })
-      .where(eq(sagaState.sagaId, sagaId));
-  }
-
-  private async updateRetryCount(sagaId: string, count: number): Promise<void> {
-    await (this.db as any)
-      .update(sagaState)
-      .set({ retryCount: count, updatedAt: new Date() })
-      .where(eq(sagaState.sagaId, sagaId));
+      await tx
+        .update(sagaState)
+        .set(setValues)
+        .where(eq(sagaState.sagaId, sagaId));
+    });
   }
 
   private async getState(sagaId: string): Promise<SagaStateRecord | null> {

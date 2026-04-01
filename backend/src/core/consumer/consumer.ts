@@ -78,11 +78,14 @@ class SimpleQueue {
 
   private async drain(): Promise<void> {
     this.running = true;
-    while (this.queue.length > 0) {
-      const fn = this.queue.shift()!;
-      await fn();
+    try {
+      while (this.queue.length > 0) {
+        const fn = this.queue.shift()!;
+        await fn();
+      }
+    } finally {
+      this.running = false;
     }
-    this.running = false;
   }
 }
 

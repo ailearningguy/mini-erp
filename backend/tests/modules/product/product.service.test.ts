@@ -116,11 +116,11 @@ describe('ProductService', () => {
       await expect(service.delete('nonexistent')).rejects.toThrow(AppError);
     });
 
-    it('should soft delete and emit event', async () => {
+    it('should soft delete and emit deactivated event', async () => {
       mockDb._mockResult.push({ id: '1', productName: 'Test', sku: 'T1' });
       await service.delete('1');
       expect(mockEventBus.emit).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'product.deleted.v1' }),
+        expect.objectContaining({ type: 'product.deactivated.v1' }),
         expect.anything(),
       );
     });

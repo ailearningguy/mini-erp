@@ -180,7 +180,7 @@ class ProductService implements IProductService {
 
       await this.eventBus.emit(
         {
-          type: 'product.deleted.v1',
+          type: 'product.deactivated.v1',
           source: 'product-service',
           aggregate_id: id,
           payload: {

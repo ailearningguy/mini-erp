@@ -35,4 +35,23 @@ describe('DIContainer', () => {
     container.register('B', () => ({}));
     expect(container.getRegisteredTokens()).toEqual(['A', 'B']);
   });
+
+  describe('validateGraph', () => {
+    it('should detect cycles via deps array without calling factories', () => {
+      container.register('A', () => ({}), ['B']);
+      container.register('B', () => ({}), ['A']);
+      expect(() => container.validateGraph()).toThrow('Circular');
+    });
+
+    it('should detect missing dependencies', () => {
+      container.register('A', () => ({}), ['Missing']);
+      expect(() => container.validateGraph()).toThrow('Missing');
+    });
+
+    it('should pass when deps are all registered', () => {
+      container.register('A', () => ({}), ['B']);
+      container.register('B', () => ({}));
+      expect(() => container.validateGraph()).not.toThrow();
+    });
+  });
 });
