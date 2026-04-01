@@ -1,0 +1,9 @@
+{
+  "name": "analytics",
+  "version": "2026.04.01",
+  "description": "Tracks domain events for analytics dashboards",
+  "entry": "./dist/index.js",
+  "dependencies": {
+    "@erp/core": ">=1.0.0"
+  }
+}

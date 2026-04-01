@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AppError, ErrorCode } from '@shared/errors';
 import type { AppConfig } from '@core/config/config';
+import { TokenRevocationService } from './token-revocation.service';
 
 interface JwtPayload {
   sub: string;
@@ -19,14 +20,21 @@ declare global {
   }
 }
 
-export function authMiddleware(config: AppConfig) {
-  return (req: Request, _res: Response, next: NextFunction): void => {
+export function authMiddleware(config: AppConfig, revocationService?: TokenRevocationService) {
+  return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
       throw new AppError(ErrorCode.UNAUTHORIZED, 'Missing or invalid Authorization header', 401);
     }
 
     const token = authHeader.slice(7);
+
+    if (revocationService) {
+      const isRevoked = await revocationService.isRevoked(token);
+      if (isRevoked) {
+        throw new AppError(ErrorCode.UNAUTHORIZED, 'Token has been revoked', 401);
+      }
+    }
 
     try {
       const decoded = jwt.verify(token, config.jwt.publicKey, {

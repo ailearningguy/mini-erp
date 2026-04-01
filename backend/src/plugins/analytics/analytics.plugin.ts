@@ -1,12 +1,12 @@
 import type { IPlugin, PluginMetadata, PluginPermission } from '@core/plugin-system/plugin-loader';
 import type { EventEnvelope } from '@shared/types/event';
+import { AnalyticsModule } from './analytics.module';
+import type { AnalyticsService } from './analytics.service';
+import { createChildLogger } from '@core/logging/logger';
 
-interface AnalyticsEventRecord {
-  eventType: string;
-  aggregateId: string;
-  timestamp: string;
-  data: Record<string, unknown>;
-}
+const log = createChildLogger({ plugin: 'analytics' });
+
+import type { AnyDb } from '@shared/types/db';
 
 const analyticsPermissions: PluginPermission[] = [
   { resource: 'product', actions: ['read'] },
@@ -16,8 +16,7 @@ const analyticsPermissions: PluginPermission[] = [
 ];
 
 class AnalyticsPlugin implements IPlugin {
-  private events: AnalyticsEventRecord[] = [];
-  private eventHandler: ((event: EventEnvelope) => void) | null = null;
+  private module: AnalyticsModule | null = null;
 
   getMetadata(): PluginMetadata {
     return {
@@ -39,64 +38,52 @@ class AnalyticsPlugin implements IPlugin {
     };
   }
 
-  async onActivate(): Promise<void> {
-    console.log('[AnalyticsPlugin] Activated — tracking domain events');
+  init(db: AnyDb): void {
+    this.module = new AnalyticsModule(db);
+  }
 
-    this.eventHandler = (event: EventEnvelope) => {
-      this.events.push({
-        eventType: event.type,
-        aggregateId: event.aggregate_id,
-        timestamp: event.timestamp,
-        data: event.payload,
-      });
-    };
+  getModule(): AnalyticsModule | null {
+    return this.module;
+  }
+
+  getService(): AnalyticsService | null {
+    return this.module?.getService() ?? null;
+  }
+
+  async onActivate(): Promise<void> {
+    log.info('Plugin activated');
   }
 
   async onDeactivate(): Promise<void> {
-    console.log('[AnalyticsPlugin] Deactivated');
-    this.eventHandler = null;
+    log.info('Plugin deactivated');
   }
 
   async onInstall(): Promise<void> {
-    console.log('[AnalyticsPlugin] Installed — schema and tables created');
+    log.info('Plugin installed');
   }
 
   async onUninstall(): Promise<void> {
-    this.events = [];
-    this.eventHandler = null;
-    console.log('[AnalyticsPlugin] Uninstalled — data cleaned up');
+    log.info('Plugin uninstalled');
   }
 
   async dispose(): Promise<void> {
-    this.eventHandler = null;
-    this.events = [];
-    console.log('[AnalyticsPlugin] Disposed — resources released');
+    log.info('Plugin disposed');
   }
 
   isActive(): boolean {
-    return this.eventHandler !== null;
-  }
-
-  getEvents(): AnalyticsEventRecord[] {
-    return [...this.events];
-  }
-
-  getEventCount(): number {
-    return this.events.length;
+    return this.module !== null;
   }
 
   setEventConsumer(consumer: { on(eventType: string, handler: (event: EventEnvelope, tx: Record<string, unknown>) => Promise<void>): void }): void {
     const metadata = this.getMetadata();
     const trackedEvents: string[] = (metadata.config?.trackedEvents as string[]) ?? [];
+    const service = this.getService();
 
     for (const eventType of trackedEvents) {
       consumer.on(eventType, async (event: EventEnvelope, _tx: Record<string, unknown>) => {
-        this.events.push({
-          eventType: event.type,
-          aggregateId: event.aggregate_id,
-          timestamp: event.timestamp,
-          data: event.payload,
-        });
+        if (service) {
+          await service.recordEvent(event);
+        }
       });
     }
   }
