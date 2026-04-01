@@ -2,6 +2,9 @@ import type { IPlugin, PluginMetadata, PluginPermission } from '@core/plugin-sys
 import type { EventEnvelope } from '@shared/types/event';
 import { AnalyticsModule } from './analytics.module';
 import type { AnalyticsService } from './analytics.service';
+import { createChildLogger } from '@core/logging/logger';
+
+const log = createChildLogger({ plugin: 'analytics' });
 
 type AnyDb = Record<string, unknown>;
 
@@ -48,23 +51,23 @@ class AnalyticsPlugin implements IPlugin {
   }
 
   async onActivate(): Promise<void> {
-    console.log('[AnalyticsPlugin] Activated — tracking domain events');
+    log.info('Plugin activated');
   }
 
   async onDeactivate(): Promise<void> {
-    console.log('[AnalyticsPlugin] Deactivated');
+    log.info('Plugin deactivated');
   }
 
   async onInstall(): Promise<void> {
-    console.log('[AnalyticsPlugin] Installed — schema and tables created');
+    log.info('Plugin installed');
   }
 
   async onUninstall(): Promise<void> {
-    console.log('[AnalyticsPlugin] Uninstalled — data cleaned up');
+    log.info('Plugin uninstalled');
   }
 
   async dispose(): Promise<void> {
-    console.log('[AnalyticsPlugin] Disposed — resources released');
+    log.info('Plugin disposed');
   }
 
   isActive(): boolean {

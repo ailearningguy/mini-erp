@@ -23,6 +23,7 @@ import { createIdempotencyMiddleware } from '@core/idempotency/idempotency.middl
 import { ApiIdempotencyStore } from '@core/idempotency/api-idempotency';
 import { createRateLimiter } from '@core/api/rate-limiter';
 import { API_CONSTANTS } from '@shared/constants';
+import { logger } from '@core/logging/logger';
 
 type AnyDb = Record<string, unknown>;
 
@@ -61,7 +62,7 @@ async function bootstrap(): Promise<void> {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
     });
-    redis.on('error', (err) => console.error('Redis connection error:', err));
+    redis.on('error', (err) => logger.error({ err }, 'Redis connection error'));
     return redis;
   });
   container.register('OutboxRepository', () => {
@@ -173,38 +174,38 @@ async function bootstrap(): Promise<void> {
 
   // --- Start server ---
   const server = app.listen(config.port, () => {
-    console.log(`ERP Backend running on port ${config.port}`);
-    console.log(`Health check: http://localhost:${config.port}/health/readiness`);
+    logger.info({ port: config.port }, 'ERP Backend started');
+    logger.info({ url: `http://localhost:${config.port}/health/readiness` }, 'Health check available');
   });
 
   // --- Graceful shutdown ---
   const shutdown = async (signal: string) => {
-    console.log(`[${signal}] Graceful shutdown initiated...`);
+    logger.info({ signal }, 'Graceful shutdown initiated');
 
     server.close(async () => {
-      console.log('HTTP server closed');
+      logger.info('HTTP server closed');
 
       try {
         const pool = (db as any).$client;
         if (pool) await pool.end();
-        console.log('Database pool closed');
+        logger.info('Database pool closed');
       } catch (e) {
-        console.error('Error closing database pool:', e);
+        logger.error({ err: e }, 'Error closing database pool');
       }
 
       try {
         const redisClient = container.resolve<any>('Redis');
         await redisClient.quit();
-        console.log('Redis connection closed');
+        logger.info('Redis connection closed');
       } catch (e) {
-        console.error('Error closing Redis:', e);
+        logger.error({ err: e }, 'Error closing Redis');
       }
 
       process.exit(0);
     });
 
     setTimeout(() => {
-      console.error('Forced shutdown after timeout');
+      logger.fatal('Forced shutdown after timeout');
       process.exit(1);
     }, 30_000);
   };
@@ -214,6 +215,6 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap().catch((error) => {
-  console.error('Failed to start application:', error);
+  logger.fatal({ err: error }, 'Failed to start application');
   process.exit(1);
 });
