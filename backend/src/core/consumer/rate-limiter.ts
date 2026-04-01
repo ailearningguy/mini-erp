@@ -55,3 +55,12 @@ class EventRateLimiter {
 
 export { EventRateLimiter, TokenBucket };
 export type { RateLimitConfig };
+
+export const DEFAULT_EVENT_RATE_LIMITS: RateLimitConfig[] = [
+  { eventType: 'product.created.v1', maxEventsPerSecond: 500 },
+  { eventType: 'product.updated.v1', maxEventsPerSecond: 500 },
+  { eventType: 'product.deactivated.v1', maxEventsPerSecond: 200 },
+  { eventType: 'order.created.v1', maxEventsPerSecond: 100 },
+  { eventType: 'order.completed.v1', maxEventsPerSecond: 100 },
+  { eventType: 'inventory.reserved.v1', maxEventsPerSecond: 200 },
+];

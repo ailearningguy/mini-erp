@@ -8,9 +8,10 @@ import { DIContainer } from '@core/di/container';
 import { EventBus } from '@core/event-bus/event-bus';
 import { OutboxRepository } from '@core/outbox/outbox.repository';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
-import { EventRateLimiter } from '@core/consumer/rate-limiter';
+import { EventRateLimiter, DEFAULT_EVENT_RATE_LIMITS } from '@core/consumer/rate-limiter';
 import { ProcessedEventStore } from '@core/consumer/processed-event.schema';
 import { EventConsumer } from '@core/consumer/consumer';
+import { AmqpConsumer } from '@core/consumer/amqp-consumer';
 import { PluginLoader } from '@core/plugin-system/plugin-loader';
 import { ExternalServiceProxy } from '@core/external-integration/proxy';
 import { CacheService } from '@core/cache/cache.service';
@@ -22,7 +23,7 @@ import { authMiddleware } from '@core/auth/auth.middleware';
 import { createIdempotencyMiddleware } from '@core/idempotency/idempotency.middleware';
 import { ApiIdempotencyStore } from '@core/idempotency/api-idempotency';
 import { createRateLimiter } from '@core/api/rate-limiter';
-import { API_CONSTANTS } from '@shared/constants';
+import { API_CONSTANTS, EVENT_CONSTANTS } from '@shared/constants';
 import { logger } from '@core/logging/logger';
 import type { AnyDb } from '@shared/types/db';
 
@@ -73,7 +74,7 @@ async function bootstrap(): Promise<void> {
     const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
     return new EventBus(outboxRepo, schemaRegistry);
   }, ['OutboxRepository', 'EventSchemaRegistry']);
-  container.register('EventRateLimiter', () => new EventRateLimiter([]));
+  container.register('EventRateLimiter', () => new EventRateLimiter(DEFAULT_EVENT_RATE_LIMITS));
   container.register('ProcessedEventStore', () => {
     const db = container.resolve<AnyDb>('Database');
     return new ProcessedEventStore(db);
@@ -142,12 +143,22 @@ async function bootstrap(): Promise<void> {
   const cacheService = container.resolve<CacheService>('CacheService');
   analyticsPlugin.setEventConsumer(eventConsumer);
 
-  eventConsumer.on('product.updated.v1', async (event) => {
+  eventConsumer.registerHandler('product.updated.v1', async (event) => {
     await cacheService.invalidate(`product:${event.aggregate_id}`);
   });
-  eventConsumer.on('product.deactivated.v1', async (event) => {
+  eventConsumer.registerHandler('product.deactivated.v1', async (event) => {
     await cacheService.invalidate(`product:${event.aggregate_id}`);
   });
+
+  const amqpConsumer = new AmqpConsumer(eventConsumer, {
+    rabbitmqUrl: config.rabbitmq.url,
+    exchange: EVENT_CONSTANTS.EXCHANGE_NAME,
+    queue: 'erp.main.consumer',
+    prefetchCount: EVENT_CONSTANTS.CONSUMER_PREFETCH_COUNT,
+  });
+
+  await amqpConsumer.connect();
+  await amqpConsumer.start();
 
   // --- Health check ---
   app.get('/health/liveness', (_req, res) => {
@@ -206,6 +217,13 @@ async function bootstrap(): Promise<void> {
         logger.info('Redis connection closed');
       } catch (e) {
         logger.error({ err: e }, 'Error closing Redis');
+      }
+
+      try {
+        await amqpConsumer.shutdown();
+        logger.info('AMQP consumer closed');
+      } catch (e) {
+        logger.error({ err: e }, 'Error closing AMQP consumer');
       }
 
       process.exit(0);

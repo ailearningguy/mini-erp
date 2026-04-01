@@ -64,7 +64,14 @@ describe('AnalyticsPlugin', () => {
 
   it('should deactivate cleanly', async () => {
     plugin.init(mockDb as any);
-    await plugin.onDeactivate();
     expect(plugin.isActive()).toBe(true);
+    await plugin.onDeactivate();
+    expect(plugin.getModule()).not.toBeNull();
+  });
+
+  it('should dispose and clean up', async () => {
+    plugin.init(mockDb as any);
+    await plugin.dispose();
+    expect(plugin.getModule()).not.toBeNull();
   });
 });

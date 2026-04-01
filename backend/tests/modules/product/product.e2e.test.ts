@@ -64,11 +64,11 @@ describe('Phase 2 E2E: Product → Outbox → Consumer → Cache', () => {
       (fn) => (db as any).transaction(fn),
     );
 
-    eventConsumer.on('product.created.v1', async () => {});
-    eventConsumer.on('product.updated.v1', async (event) => {
+    eventConsumer.registerHandler('product.created.v1', async () => {});
+    eventConsumer.registerHandler('product.updated.v1', async (event) => {
       await cacheService.invalidate(`product:${event.aggregate_id}`);
     });
-    eventConsumer.on('product.deactivated.v1', async (event) => {
+    eventConsumer.registerHandler('product.deactivated.v1', async (event) => {
       await cacheService.invalidate(`product:${event.aggregate_id}`);
     });
   });

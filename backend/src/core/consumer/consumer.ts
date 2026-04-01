@@ -1,3 +1,4 @@
+import { EventEmitter } from 'events';
 import type { EventEnvelope } from '@shared/types/event';
 import { ProcessedEventStore } from './processed-event.schema';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
@@ -6,7 +7,7 @@ import { EventRateLimiter } from '@core/consumer/rate-limiter';
 type EventHandler = (event: EventEnvelope, tx: Record<string, unknown>) => Promise<void>;
 type DbTransaction = <T>(fn: (tx: Record<string, unknown>) => Promise<T>) => Promise<T>;
 
-class EventConsumer {
+class EventConsumer extends EventEmitter {
   private handlers = new Map<string, EventHandler>();
   private aggregateQueues = new Map<string, SimpleQueue>();
 
@@ -15,13 +16,16 @@ class EventConsumer {
     private readonly schemaRegistry: EventSchemaRegistry,
     private readonly rateLimiter: EventRateLimiter,
     private readonly dbTransaction: DbTransaction,
-  ) {}
+  ) {
+    super();
+  }
 
-  on(eventType: string, handler: EventHandler): void {
+  registerHandler(eventType: string, handler: EventHandler): void {
     if (this.handlers.has(eventType)) {
       throw new Error(`Handler already registered for event type: ${eventType}`);
     }
     this.handlers.set(eventType, handler);
+    this.emit('handler-registered', eventType);
   }
 
   async consume(rawMessage: unknown): Promise<void> {
@@ -55,6 +59,7 @@ class EventConsumer {
       await handler(event, tx);
       await this.processedEventStore.mark(event.id, event.type, tx);
     });
+    this.emit('event-processed', event);
   }
 
   private getOrCreateQueue(aggregateId: string): SimpleQueue {
