@@ -1,7 +1,7 @@
 import type { IProductService } from './interfaces/product.service.interface';
 import { ProductService } from './product.service';
 import { ProductController } from './product.controller';
-import { ProductCreatedEventSchema, ProductUpdatedEventSchema, ProductDeletedEventSchema } from './events/product.events';
+import { ProductCreatedEventSchema, ProductUpdatedEventSchema, ProductDeactivatedEventSchema } from './events/product.events';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
 import { EventBus } from '@core/event-bus/event-bus';
 import type { Express } from 'express';
@@ -40,7 +40,7 @@ class ProductModule {
   private registerEventSchemas(): void {
     this.config.schemaRegistry.register('product.created.v1', ProductCreatedEventSchema);
     this.config.schemaRegistry.register('product.updated.v1', ProductUpdatedEventSchema);
-    this.config.schemaRegistry.register('product.deleted.v1', ProductDeletedEventSchema);
+    this.config.schemaRegistry.register('product.deactivated.v1', ProductDeactivatedEventSchema);
   }
 }
 

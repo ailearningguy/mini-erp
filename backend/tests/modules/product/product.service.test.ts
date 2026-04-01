@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { ProductService } from '@modules/product/product.service';
 import { AppError, ErrorCode } from '@shared/errors';
+import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
+import { ProductDeactivatedEventSchema } from '@modules/product/events/product.events';
 
 function createMockDb() {
   const mockResult: any[] = [];
@@ -123,6 +125,42 @@ describe('ProductService', () => {
         expect.objectContaining({ type: 'product.deactivated.v1' }),
         expect.anything(),
       );
+    });
+  });
+
+  describe('event schema registration', () => {
+    it('should register schema for product.deactivated.v1 (not product.deleted.v1)', () => {
+      const registry = new EventSchemaRegistry();
+      registry.register('product.deactivated.v1', ProductDeactivatedEventSchema);
+
+      const event = {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        type: 'product.deactivated.v1',
+        source: 'product-service',
+        timestamp: new Date().toISOString(),
+        aggregate_id: '550e8400-e29b-41d4-a716-446655440001',
+        payload: { productId: '550e8400-e29b-41d4-a716-446655440001', productName: 'Test', sku: 'T1' },
+        metadata: { version: 'v1' },
+      };
+
+      expect(() => registry.validate('product.deactivated.v1', event)).not.toThrow();
+    });
+
+    it('should fail validation if wrong event type registered', () => {
+      const registry = new EventSchemaRegistry();
+      registry.register('product.deleted.v1', ProductDeactivatedEventSchema);
+
+      const event = {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        type: 'product.deactivated.v1',
+        source: 'product-service',
+        timestamp: new Date().toISOString(),
+        aggregate_id: '550e8400-e29b-41d4-a716-446655440001',
+        payload: { productId: '550e8400-e29b-41d4-a716-446655440001', productName: 'Test', sku: 'T1' },
+        metadata: { version: 'v1' },
+      };
+
+      expect(() => registry.validate('product.deactivated.v1', event)).toThrow(/No schema registered/);
     });
   });
 });
