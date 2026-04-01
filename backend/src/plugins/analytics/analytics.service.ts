@@ -2,8 +2,7 @@ import { eq, gt, and, gte, lte } from 'drizzle-orm';
 import { analyticsEvents } from './analytics.schema';
 import type { AnalyticsQuery } from './dto/analytics-query.dto';
 import type { EventEnvelope } from '@shared/types/event';
-
-type AnyDb = Record<string, unknown>;
+import type { AnyDb } from '@shared/types/db';
 
 export class AnalyticsService {
   constructor(private readonly db: AnyDb) {}

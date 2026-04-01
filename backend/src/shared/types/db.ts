@@ -1,0 +1,1 @@
+export type AnyDb = Record<string, unknown>;

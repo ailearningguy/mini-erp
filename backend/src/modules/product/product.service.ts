@@ -6,7 +6,7 @@ import type { IProductService, Product } from './interfaces/product.service.inte
 import { EventBus } from '@core/event-bus/event-bus';
 import { AppError, ErrorCode } from '@shared/errors';
 
-type AnyDb = Record<string, unknown>;
+import type { AnyDb } from '@shared/types/db';
 
 class ProductService implements IProductService {
   constructor(

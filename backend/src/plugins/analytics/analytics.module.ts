@@ -1,8 +1,7 @@
 import type { Express } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsController } from './analytics.controller';
-
-type AnyDb = Record<string, unknown>;
+import type { AnyDb } from '@shared/types/db';
 
 export class AnalyticsModule {
   private service: AnalyticsService;

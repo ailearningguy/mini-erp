@@ -2,8 +2,7 @@ import { eq, and, lte, asc, sql } from 'drizzle-orm';
 import { outbox, outboxDlq } from './outbox.schema';
 import type { EventEnvelope } from '@shared/types/event';
 import { EVENT_CONSTANTS } from '@shared/constants';
-
-type AnyDb = Record<string, unknown>;
+import type { AnyDb } from '@shared/types/db';
 
 class OutboxRepository {
   constructor(private readonly db: AnyDb) {}

@@ -6,7 +6,7 @@ import { createChildLogger } from '@core/logging/logger';
 
 const log = createChildLogger({ plugin: 'analytics' });
 
-type AnyDb = Record<string, unknown>;
+import type { AnyDb } from '@shared/types/db';
 
 const analyticsPermissions: PluginPermission[] = [
   { resource: 'product', actions: ['read'] },

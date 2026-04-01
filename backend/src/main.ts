@@ -24,8 +24,7 @@ import { ApiIdempotencyStore } from '@core/idempotency/api-idempotency';
 import { createRateLimiter } from '@core/api/rate-limiter';
 import { API_CONSTANTS } from '@shared/constants';
 import { logger } from '@core/logging/logger';
-
-type AnyDb = Record<string, unknown>;
+import type { AnyDb } from '@shared/types/db';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
