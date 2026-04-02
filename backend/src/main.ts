@@ -39,8 +39,9 @@ import { ModuleInstaller } from '@core/module-installer/module-installer';
 import { createModuleRoutes } from '@core/module-installer/module.routes';
 import type { Db } from '@shared/types/db';
 import { HookRegistry, HookExecutor, detectHookConflicts } from '@core/hooks';
-import { CapabilityRegistry, CapabilityExecutor, validateCapabilities } from '@core/capability';
-import { pricingCapability } from '@modules/product/capabilities/pricing.capability';
+import { CapabilityExecutor, validateCapabilities } from '@core/capability';
+import { CapabilityGovernanceRegistry, checkDeprecations } from '@core/capability-governance';
+import { pricingContract, pricingCapability } from '@modules/product/capabilities/pricing.capability';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -104,15 +105,18 @@ async function bootstrap(): Promise<void> {
     useFactory: (c) => new HookExecutor(c.get('HookRegistry'), logger),
     deps: ['HookRegistry'],
   });
+  container.registerCore('CapabilityGovernanceRegistry', {
+    useFactory: () => new CapabilityGovernanceRegistry(),
+  });
   container.registerCore('CapabilityRegistry', {
-    useFactory: () => new CapabilityRegistry(),
+    useFactory: (c) => c.get('CapabilityGovernanceRegistry'),
   });
   container.registerCore('CapabilityExecutor', {
     useFactory: (c) => new CapabilityExecutor(
-      c.get('CapabilityRegistry'),
+      c.get('CapabilityGovernanceRegistry'),
       logger,
     ),
-    deps: ['CapabilityRegistry'],
+    deps: ['CapabilityGovernanceRegistry'],
   });
   container.register('EventBus', () => {
     const outboxRepo = container.resolve<OutboxRepository>('OutboxRepository');
@@ -199,9 +203,11 @@ async function bootstrap(): Promise<void> {
   const hookRegistry = container.get<HookRegistry>('HookRegistry');
   detectHookConflicts(hookRegistry.getAllHooks());
 
-  const capabilityRegistry = container.get<CapabilityRegistry>('CapabilityRegistry');
+  const capabilityRegistry = container.get<CapabilityGovernanceRegistry>('CapabilityGovernanceRegistry');
   capabilityRegistry.registerCapability(pricingCapability);
+  capabilityRegistry.registerContract(pricingContract);
   validateCapabilities(capabilityRegistry);
+  checkDeprecations(capabilityRegistry.getAllContracts());
 
   // --- Register plugins ---
   const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
