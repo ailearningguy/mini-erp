@@ -12,6 +12,7 @@ import {
   roundingHandler,
   finalPriceHandler,
 } from './capabilities/pricing.capability';
+import { products } from './product.schema';
 
 const productModuleFactory: ModuleFactory = {
   async create(container: DIContainer): Promise<ModuleDefinition> {
@@ -43,6 +44,9 @@ const productModuleFactory: ModuleFactory = {
       ],
       exports: ['IProductService'],
       capabilities: [basePriceHandler, roundingHandler, finalPriceHandler],
+      schemas: {
+        products,
+      },
     };
   },
 };
