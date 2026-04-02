@@ -39,6 +39,8 @@ import { ModuleInstaller } from '@core/module-installer/module-installer';
 import { createModuleRoutes } from '@core/module-installer/module.routes';
 import type { Db } from '@shared/types/db';
 import { HookRegistry, HookExecutor, detectHookConflicts } from '@core/hooks';
+import { CapabilityRegistry, CapabilityExecutor, validateCapabilities } from '@core/capability';
+import { pricingCapability } from '@modules/product/capabilities/pricing.capability';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -101,6 +103,16 @@ async function bootstrap(): Promise<void> {
   container.registerCore('HookExecutor', {
     useFactory: (c) => new HookExecutor(c.get('HookRegistry'), logger),
     deps: ['HookRegistry'],
+  });
+  container.registerCore('CapabilityRegistry', {
+    useFactory: () => new CapabilityRegistry(),
+  });
+  container.registerCore('CapabilityExecutor', {
+    useFactory: (c) => new CapabilityExecutor(
+      c.get('CapabilityRegistry'),
+      logger,
+    ),
+    deps: ['CapabilityRegistry'],
   });
   container.register('EventBus', () => {
     const outboxRepo = container.resolve<OutboxRepository>('OutboxRepository');
@@ -186,6 +198,10 @@ async function bootstrap(): Promise<void> {
 
   const hookRegistry = container.get<HookRegistry>('HookRegistry');
   detectHookConflicts(hookRegistry.getAllHooks());
+
+  const capabilityRegistry = container.get<CapabilityRegistry>('CapabilityRegistry');
+  capabilityRegistry.registerCapability(pricingCapability);
+  validateCapabilities(capabilityRegistry);
 
   // --- Register plugins ---
   const pluginLoader = container.resolve<PluginLoader>('PluginLoader');

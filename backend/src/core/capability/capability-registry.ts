@@ -41,6 +41,10 @@ class CapabilityRegistry {
     return [...this.capabilities.values()];
   }
 
+  getCapabilitiesMap(): Map<string, Capability> {
+    return new Map(this.capabilities);
+  }
+
   getAllHandlers(): CapabilityHandler[] {
     const result: CapabilityHandler[] = [];
     for (const handlers of this.handlers.values()) {

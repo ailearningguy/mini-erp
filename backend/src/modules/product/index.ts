@@ -6,6 +6,12 @@ import type { EventSchemaRegistry } from '@core/event-schema-registry/registry';
 import type { EventConsumer } from '@core/consumer/consumer';
 import type { CacheService } from '@core/cache/cache.service';
 import type { Express } from 'express';
+import {
+  pricingCapability,
+  basePriceHandler,
+  roundingHandler,
+  finalPriceHandler,
+} from './capabilities/pricing.capability';
 
 const productModuleFactory: ModuleFactory = {
   async create(container: DIContainer): Promise<ModuleDefinition> {
@@ -36,8 +42,10 @@ const productModuleFactory: ModuleFactory = {
         },
       ],
       exports: ['IProductService'],
+      capabilities: [basePriceHandler, roundingHandler, finalPriceHandler],
     };
   },
 };
 
 export default productModuleFactory;
+export { pricingCapability };

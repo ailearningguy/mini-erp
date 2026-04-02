@@ -1,7 +1,7 @@
 import type { CapabilityRegistry } from './capability-registry';
 
 function validateCapabilities(registry: CapabilityRegistry): void {
-  const capabilities = (registry as any).capabilities as Map<string, import('./types').Capability>;
+  const capabilities = registry.getCapabilitiesMap();
 
   for (const [name, cap] of capabilities) {
     const handlers = registry.getHandlers(name);
