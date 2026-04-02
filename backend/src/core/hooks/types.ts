@@ -5,16 +5,16 @@ interface HookPoint {
   failSafe?: boolean;
 }
 
-interface HookHandler {
+interface HookHandler<TData = unknown> {
   plugin?: string;
   module?: string;
   priority?: number;
-  handler: (context: HookContext) => Promise<void>;
+  handler: (context: HookContext<TData>) => Promise<void>;
 }
 
-interface HookContext {
-  data: any;
-  result?: any;
+interface HookContext<TData = unknown> {
+  data: TData;
+  result?: unknown;
   stopPropagation?: boolean;
   metadata: {
     point: string;
@@ -23,10 +23,10 @@ interface HookContext {
   };
 }
 
-interface HookRegistration {
+interface HookRegistration<TData = unknown> {
   point: string;
   phase: 'pre' | 'post';
-  handler: (ctx: HookContext) => Promise<void>;
+  handler: (ctx: HookContext<TData>) => Promise<void>;
   plugin?: string;
   module?: string;
   priority?: number;

@@ -8,7 +8,7 @@ interface CapabilityHandlerStub {
   priority?: number;
   exclusive?: boolean;
   module?: string;
-  handle: (ctx: any) => Promise<void>;
+  handle: (ctx: unknown) => Promise<void>;
 }
 
 interface CapabilityRequirementStub {

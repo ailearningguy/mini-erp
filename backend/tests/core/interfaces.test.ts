@@ -52,4 +52,22 @@ describe('Core interfaces', () => {
     const path = require('node:path');
     expect(fs.existsSync(path.resolve(__dirname, '../../src/core/hooks/hook-executor.interface.ts'))).toBe(true);
   });
+
+  it('should not have any type in capability types', () => {
+    const content = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../src/core/capability/types.ts'),
+      'utf-8',
+    );
+    const anyMatches = content.match(/:\s*any\b/g);
+    expect(anyMatches).toBeNull();
+  });
+
+  it('should not have any type in hooks types', () => {
+    const content = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../src/core/hooks/types.ts'),
+      'utf-8',
+    );
+    const anyMatches = content.match(/:\s*any\b/g);
+    expect(anyMatches).toBeNull();
+  });
 });

@@ -4,21 +4,21 @@ interface Capability {
   stages?: string[];
 }
 
-interface CapabilityHandler {
+interface CapabilityHandler<TInput = unknown, TResult = unknown> {
   capability: string;
   stage?: string;
   priority?: number;
   exclusive?: boolean;
-  condition?: (ctx: CapabilityContext) => boolean;
+  condition?: (ctx: CapabilityContext<TInput, TResult>) => boolean;
   plugin?: string;
   module?: string;
-  handle: (ctx: CapabilityContext) => Promise<void>;
+  handle: (ctx: CapabilityContext<TInput, TResult>) => Promise<void>;
 }
 
-interface CapabilityContext {
-  input: any;
-  state: Record<string, any>;
-  result?: any;
+interface CapabilityContext<TInput = unknown, TResult = unknown> {
+  input: TInput;
+  state: Record<string, unknown>;
+  result?: TResult;
   stop?: boolean;
 }
 
