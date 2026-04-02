@@ -17,6 +17,10 @@ const analyticsPermissions: PluginPermission[] = [
 class AnalyticsPlugin implements IPlugin {
   private module: AnalyticsModule | null = null;
 
+  constructor(db: Db) {
+    this.module = new AnalyticsModule(db);
+  }
+
   getMetadata(): PluginMetadata {
     return {
       name: 'analytics',
@@ -35,10 +39,6 @@ class AnalyticsPlugin implements IPlugin {
         ],
       },
     };
-  }
-
-  init(db: Db): void {
-    this.module = new AnalyticsModule(db);
   }
 
   getModule(): AnalyticsModule | null {

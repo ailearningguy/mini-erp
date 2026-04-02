@@ -11,13 +11,13 @@ describe('ArchitectureValidator', () => {
 
   describe('validateDIGraph', () => {
     it('should detect cycles', async () => {
-      await expect(
-        validator.validateOnStartup(['A', 'B'], (token) => {
-          if (token === 'A') return ['B'];
-          if (token === 'B') return ['A'];
-          return [];
-        }),
-      ).rejects.toThrow('Circular');
+      const result = await validator.validateOnStartup(['A', 'B'], (token) => {
+        if (token === 'A') return ['B'];
+        if (token === 'B') return ['A'];
+        return [];
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors?.[0]).toContain('Circular');
     });
 
     it('should pass with no cycles', async () => {
@@ -90,6 +90,46 @@ describe('ArchitectureValidator', () => {
         { token: 'IProductService', implementation: 'ProductService', isInterface: true },
       ];
       expect(() => validator.validateServiceInterfaces(bindings)).not.toThrow();
+    });
+  });
+
+  describe('ArchitectureValidator with empty inputs', () => {
+    it('should skip plugin validation when plugins array is empty', async () => {
+      const testValidator = new ArchitectureValidator();
+      const tokens = ['EventBus', 'Database', 'CacheService', 'EventSchemaRegistry', 'OutboxRepository', 'Config'];
+
+      const result = await testValidator.validateOnStartup(
+        tokens,
+        () => [],
+        {
+          dependencyGraph: { nodes: tokens.map(t => t.toLowerCase()), edges: [] },
+          plugins: [],
+          serviceBindings: [],
+        },
+      );
+
+      expect(result.valid).toBe(true);
+    });
+
+    it('should validate plugin permissions when plugins are provided', async () => {
+      const testValidator = new ArchitectureValidator();
+      const tokens = ['EventBus', 'Database', 'PluginLoader', 'EventSchemaRegistry', 'OutboxRepository', 'Config'];
+
+      const result = await testValidator.validateOnStartup(
+        tokens,
+        () => [],
+        {
+          dependencyGraph: { nodes: tokens.map(t => t.toLowerCase()), edges: [] },
+          plugins: [{
+            name: 'analytics',
+            permissions: [{ resource: 'product', actions: ['read'] }],
+            activatedAt: new Date(),
+          }],
+          serviceBindings: [{ token: 'IProductService', implementation: 'ProductService', isInterface: true }],
+        },
+      );
+
+      expect(result.valid).toBe(true);
     });
   });
 });

@@ -13,8 +13,8 @@ describe('AnalyticsPlugin', () => {
   let mockDb: ReturnType<typeof createMockDb>;
 
   beforeEach(() => {
-    plugin = new AnalyticsPlugin();
     mockDb = createMockDb();
+    plugin = new AnalyticsPlugin(mockDb as any);
   });
 
   it('should return correct metadata', () => {
@@ -24,20 +24,15 @@ describe('AnalyticsPlugin', () => {
   });
 
   it('should initialize module with database', () => {
-    plugin.init(mockDb as any);
     expect(plugin.getModule()).not.toBeNull();
     expect(plugin.getService()).not.toBeNull();
   });
 
-  it('should be active after init', () => {
-    expect(plugin.isActive()).toBe(false);
-    plugin.init(mockDb as any);
+  it('should be active after construction', () => {
     expect(plugin.isActive()).toBe(true);
   });
 
   it('should record events via service when consumer receives event', async () => {
-    plugin.init(mockDb as any);
-
     const handlers: Record<string, Function> = {};
     const mockConsumer = {
       on: jest.fn((eventType: string, handler: Function) => {
@@ -63,14 +58,12 @@ describe('AnalyticsPlugin', () => {
   });
 
   it('should deactivate cleanly', async () => {
-    plugin.init(mockDb as any);
     expect(plugin.isActive()).toBe(true);
     await plugin.onDeactivate();
     expect(plugin.getModule()).not.toBeNull();
   });
 
   it('should dispose and clean up', async () => {
-    plugin.init(mockDb as any);
     await plugin.dispose();
     expect(plugin.getModule()).not.toBeNull();
   });

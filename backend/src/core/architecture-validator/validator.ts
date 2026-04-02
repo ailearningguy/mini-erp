@@ -15,6 +15,11 @@ interface ServiceBinding {
   isInterface: boolean;
 }
 
+interface ValidationResult {
+  valid: boolean;
+  errors?: string[];
+}
+
 class ArchitectureValidator {
   async validateOnStartup(
     diTokens: string[],
@@ -24,21 +29,30 @@ class ArchitectureValidator {
       plugins?: PluginRegistration[];
       serviceBindings?: ServiceBinding[];
     },
-  ): Promise<void> {
-    this.validateDIGraph(diTokens, dependencyResolver);
-    this.validateServiceBindings(diTokens);
+  ): Promise<ValidationResult> {
+    try {
+      this.validateDIGraph(diTokens, dependencyResolver);
+      this.validateServiceBindings(diTokens);
 
-    if (options?.dependencyGraph) {
-      this.validateNoCoreToModule(options.dependencyGraph);
-      this.validateNoCoreToPlugin(options.dependencyGraph);
-    }
+      if (options?.dependencyGraph) {
+        this.validateNoCoreToModule(options.dependencyGraph);
+        this.validateNoCoreToPlugin(options.dependencyGraph);
+      }
 
-    if (options?.plugins) {
-      this.validatePluginGuards(options.plugins);
-    }
+      if (options?.plugins) {
+        this.validatePluginGuards(options.plugins);
+      }
 
-    if (options?.serviceBindings) {
-      this.validateServiceInterfaces(options.serviceBindings);
+      if (options?.serviceBindings) {
+        this.validateServiceInterfaces(options.serviceBindings);
+      }
+
+      return { valid: true };
+    } catch (error) {
+      return {
+        valid: false,
+        errors: [error instanceof Error ? error.message : String(error)],
+      };
     }
   }
 

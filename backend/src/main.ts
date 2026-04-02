@@ -19,6 +19,7 @@ import { ArchitectureValidator } from '@core/architecture-validator/validator';
 import { ModuleRegistry } from '@core/module-registry/registry';
 import { ProductModule } from '@modules/product/product.module';
 import { OrderModule } from '@modules/order/order.module';
+import { SagaOrchestrator } from '@core/saga/saga-orchestrator';
 import { AnalyticsPlugin } from '@plugins/analytics/analytics.plugin';
 import { requestIdMiddleware, snakeCaseMiddleware, snakeCaseResponseMiddleware, globalErrorHandler } from '@core/api/response';
 import { authMiddleware } from '@core/auth/auth.middleware';
@@ -77,9 +78,6 @@ async function bootstrap(): Promise<void> {
     const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
     return new EventBus(outboxRepo, schemaRegistry);
   }, ['OutboxRepository', 'EventSchemaRegistry']);
-  container.register('EventRateLimiter', () => {
-    return new EventRateLimiter([]);
-  });
   container.register('ProcessedEventStore', () => {
     const db = container.resolve<Db>('Database');
     return new ProcessedEventStore(db);
@@ -103,7 +101,7 @@ async function bootstrap(): Promise<void> {
   container.register('ExternalServiceProxy', () => new ExternalServiceProxy(new PluginGuard()));
   container.register('ArchitectureValidator', () => new ArchitectureValidator());
 
-  // --- Validate DI graph ---
+  // --- Validate DI graph (before module/plugin registration) ---
   const validator = container.resolve<ArchitectureValidator>('ArchitectureValidator');
 
   // Build dependency graph from registered DI tokens
@@ -117,6 +115,7 @@ async function bootstrap(): Promise<void> {
     }
   }
 
+  // Early validation before modules/plugins are registered
   await validator.validateOnStartup(
     container.getRegisteredTokens(),
     (token) => container.getDependencies(token),
@@ -170,10 +169,49 @@ async function bootstrap(): Promise<void> {
 
   // --- Register plugins ---
   const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
-  const analyticsPlugin = new AnalyticsPlugin();
-  analyticsPlugin.init(db);
+  const analyticsPlugin = new AnalyticsPlugin(db);
   await pluginLoader.register(analyticsPlugin);
   await pluginLoader.activate('analytics');
+
+  // --- Validate architecture with real plugins after registration ---
+  const activePlugins = pluginLoader.getActivePlugins().map(name => {
+    const reg = (pluginLoader as any).plugins.get(name);
+    if (!reg) return null;
+    const metadata = reg.metadata;
+    return {
+      name: metadata.name,
+      permissions: metadata.permissions ?? [],
+      activatedAt: new Date(),
+    };
+  }).filter(Boolean);
+
+  const registeredTokens = container.getRegisteredTokens();
+  const serviceBindings = registeredTokens
+    .filter(t => t.startsWith('I') && t[1] === t[1].toUpperCase())
+    .map(t => ({ token: t, implementation: t.replace('I', '').replace(/Service$/, ''), isInterface: true }));
+
+  const finalGraphNodes = registeredTokens.map((t) => t.toLowerCase());
+  const finalGraphEdges: { from: string; to: string }[] = [];
+  for (const token of registeredTokens) {
+    const deps = container.getDependencies(token);
+    for (const dep of deps) {
+      finalGraphEdges.push({ from: token.toLowerCase(), to: dep.toLowerCase() });
+    }
+  }
+
+  const validationResult = await validator.validateOnStartup(
+    registeredTokens,
+    (token) => container.getDependencies(token),
+    {
+      dependencyGraph: { nodes: finalGraphNodes, edges: finalGraphEdges },
+      plugins: activePlugins,
+      serviceBindings: serviceBindings,
+    },
+  );
+
+  if (!validationResult.valid) {
+    logger.warn({ errors: validationResult.errors }, 'Architecture validation warnings');
+  }
 
   const analyticsModule = analyticsPlugin.getModule();
   if (analyticsModule) {
@@ -187,6 +225,10 @@ async function bootstrap(): Promise<void> {
   for (const reg of moduleRegistry.getEventHandlers()) {
     eventConsumer.registerHandler(reg.eventType, reg.handler);
   }
+
+  // --- Wire Saga Orchestrator ---
+  const sagaOrchestrator = new SagaOrchestrator(db);
+  logger.info('SagaOrchestrator initialized');
 
   const amqpConsumer = new AmqpConsumer(eventConsumer, {
     rabbitmqUrl: config.rabbitmq.url,
