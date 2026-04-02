@@ -56,6 +56,10 @@ export const ProductDeactivatedEventSchema = z.object({
 
 export type ProductDeactivatedEvent = z.infer<typeof ProductDeactivatedEventSchema>;
 
-/** @deprecated Use ProductDeactivatedEventSchema */
+/**
+ * @deprecated Use ProductDeactivatedEventSchema instead.
+ * This alias exists for backward compatibility only.
+ * The canonical event type is 'product.deactivated.v1'.
+ */
 export const ProductDeletedEventSchema = ProductDeactivatedEventSchema;
 export type ProductDeletedEvent = ProductDeactivatedEvent;

@@ -53,7 +53,8 @@ describe('SagaOrchestrator', () => {
 
     expect(sagaId).toBeDefined();
     expect(typeof sagaId).toBe('string');
-    expect(mockDb._insertMock).toHaveBeenCalled();
+    // persistState is now wrapped in a transaction
+    expect(mockDb.transaction).toHaveBeenCalled();
   });
 
   it('should execute all steps in order', async () => {

@@ -29,6 +29,16 @@ class EventConsumer extends EventEmitter {
     this.emit('handler-registered', eventType);
   }
 
+  registerHandlers(registrations: { eventType: string; handler: EventHandler }[]): void {
+    for (const reg of registrations) {
+      this.registerHandler(reg.eventType, reg.handler);
+    }
+  }
+
+  getRegisteredHandlerTypes(): string[] {
+    return [...this.handlers.keys()];
+  }
+
   async consume(rawMessage: unknown): Promise<void> {
     const event = this.schemaRegistry.validate(
       (rawMessage as EventEnvelope).type,

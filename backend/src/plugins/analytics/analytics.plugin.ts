@@ -45,6 +45,10 @@ class AnalyticsPlugin implements IPlugin {
     return this.module;
   }
 
+  getModules(): unknown[] {
+    return this.module ? [this.module] : [];
+  }
+
   getService(): AnalyticsService | null {
     return this.module?.getService() ?? null;
   }
@@ -81,7 +85,14 @@ class AnalyticsPlugin implements IPlugin {
     for (const eventType of trackedEvents) {
       consumer.on(eventType, async (event: EventEnvelope, _tx: Record<string, unknown>) => {
         if (service) {
-          await service.recordEvent(event);
+          try {
+            await service.recordEvent(event);
+          } catch (error) {
+            log.error(
+              { err: error, eventType: event.type, eventId: event.id },
+              'Analytics plugin failed to record event — swallowing error to prevent cascade',
+            );
+          }
         }
       });
     }

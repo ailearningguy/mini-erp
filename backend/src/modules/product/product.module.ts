@@ -36,6 +36,24 @@ class ProductModule {
     app.delete('/api/v1/products/:id', (req, res, next) => this.controller.delete(req, res, next));
   }
 
+  registerWithRegistry(
+    registry: { registerRateLimits: (mod: string, cfgs: { eventType: string; maxEventsPerSecond: number }[]) => void; registerEventHandler: (mod: string, type: string, handler: (event: any, tx: any) => Promise<void>) => void },
+    cacheService: { invalidate: (key: string) => Promise<void> },
+  ): void {
+    registry.registerRateLimits('product', [
+      { eventType: 'product.created.v1', maxEventsPerSecond: 500 },
+      { eventType: 'product.updated.v1', maxEventsPerSecond: 500 },
+      { eventType: 'product.deactivated.v1', maxEventsPerSecond: 200 },
+    ]);
+
+    registry.registerEventHandler('product', 'product.updated.v1', async (event) => {
+      await cacheService.invalidate(`product:${event.aggregate_id}`);
+    });
+    registry.registerEventHandler('product', 'product.deactivated.v1', async (event) => {
+      await cacheService.invalidate(`product:${event.aggregate_id}`);
+    });
+  }
+
   private registerEventSchemas(): void {
     this.config.schemaRegistry.register('product.created.v1', ProductCreatedEventSchema);
     this.config.schemaRegistry.register('product.updated.v1', ProductUpdatedEventSchema);

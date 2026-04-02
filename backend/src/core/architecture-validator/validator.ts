@@ -19,9 +19,27 @@ class ArchitectureValidator {
   async validateOnStartup(
     diTokens: string[],
     dependencyResolver: (token: string) => string[],
+    options?: {
+      dependencyGraph?: DependencyGraph;
+      plugins?: PluginRegistration[];
+      serviceBindings?: ServiceBinding[];
+    },
   ): Promise<void> {
     this.validateDIGraph(diTokens, dependencyResolver);
     this.validateServiceBindings(diTokens);
+
+    if (options?.dependencyGraph) {
+      this.validateNoCoreToModule(options.dependencyGraph);
+      this.validateNoCoreToPlugin(options.dependencyGraph);
+    }
+
+    if (options?.plugins) {
+      this.validatePluginGuards(options.plugins);
+    }
+
+    if (options?.serviceBindings) {
+      this.validateServiceInterfaces(options.serviceBindings);
+    }
   }
 
   private validateDIGraph(

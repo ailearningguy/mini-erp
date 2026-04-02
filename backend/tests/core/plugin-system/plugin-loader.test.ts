@@ -14,6 +14,7 @@ function createTestPlugin(overrides: Partial<PluginMetadata> = {}): IPlugin {
 
   return {
     getMetadata: () => metadata,
+    getModules: () => [],
     onActivate: jest.fn(async () => {}),
     onDeactivate: jest.fn(async () => {}),
     dispose: jest.fn(async () => {}),

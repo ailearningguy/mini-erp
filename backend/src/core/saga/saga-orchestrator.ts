@@ -176,17 +176,19 @@ class SagaOrchestrator {
   }
 
   private async persistState(state: Omit<SagaStateRecord, 'id' | 'startedAt' | 'updatedAt' | 'completedAt' | 'ttlAt'>): Promise<void> {
-    await this.db.insert(sagaState).values({
-      sagaId: state.sagaId,
-      sagaName: state.sagaName,
-      aggregateId: state.aggregateId,
-      status: state.status,
-      currentStep: state.currentStep,
-      completedSteps: JSON.stringify(state.completedSteps),
-      compensatedSteps: JSON.stringify(state.compensatedSteps),
-      context: JSON.stringify(state.context),
-      retryCount: state.retryCount,
-      lastError: state.lastError,
+    await this.withTransaction(async (tx) => {
+      await tx.insert(sagaState).values({
+        sagaId: state.sagaId,
+        sagaName: state.sagaName,
+        aggregateId: state.aggregateId,
+        status: state.status,
+        currentStep: state.currentStep,
+        completedSteps: state.completedSteps,
+        compensatedSteps: state.compensatedSteps,
+        context: state.context,
+        retryCount: state.retryCount,
+        lastError: state.lastError,
+      });
     });
   }
 
@@ -207,8 +209,8 @@ class SagaOrchestrator {
 
       if (updates.status !== undefined) setValues.status = updates.status;
       if (updates.currentStep !== undefined) setValues.currentStep = updates.currentStep;
-      if (updates.completedSteps !== undefined) setValues.completedSteps = JSON.stringify(updates.completedSteps);
-      if (updates.compensatedSteps !== undefined) setValues.compensatedSteps = JSON.stringify(updates.compensatedSteps);
+      if (updates.completedSteps !== undefined) setValues.completedSteps = updates.completedSteps;
+      if (updates.compensatedSteps !== undefined) setValues.compensatedSteps = updates.compensatedSteps;
       if (updates.lastError !== undefined) setValues.lastError = updates.lastError;
       if (updates.completedAt !== undefined) setValues.completedAt = updates.completedAt;
       if (updates.retryCount !== undefined) setValues.retryCount = updates.retryCount;

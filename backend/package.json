@@ -10,6 +10,8 @@
     "lint": "eslint src/ --ext .ts",
     "lint:spec": "swagger-cli validate specs/openapi.yaml",
     "lint:migration": "tsx scripts/lint-migrations.ts",
+    "lint:arch": "tsx scripts/lint-arch.ts",
+    "validate:runtime": "tsx scripts/validate-runtime.ts",
     "typecheck": "tsc --noEmit",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",

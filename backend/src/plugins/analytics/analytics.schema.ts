@@ -3,7 +3,7 @@ import { pgTable, uuid, varchar, timestamp, jsonb, index } from 'drizzle-orm/pg-
 export const analyticsEvents = pgTable('plugin_analytics_events', {
   id: uuid('id').defaultRandom().primaryKey(),
   eventType: varchar('event_type', { length: 255 }).notNull(),
-  aggregateId: varchar('aggregate_id', { length: 255 }).notNull(),
+  aggregateId: uuid('aggregate_id').notNull(),
   data: jsonb('data').notNull(),
   recordedAt: timestamp('recorded_at').defaultNow().notNull(),
 }, (table) => ({

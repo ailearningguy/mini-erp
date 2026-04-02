@@ -22,8 +22,11 @@ interface PluginMetadata {
 
 interface IPlugin {
   getMetadata(): PluginMetadata;
+  getModules(): unknown[];
   onActivate(): Promise<void>;
   onDeactivate(): Promise<void>;
+  onInstall?(): Promise<void>;
+  onUninstall?(): Promise<void>;
   dispose(): Promise<void>;
 }
 

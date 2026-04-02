@@ -8,7 +8,7 @@ import { DIContainer } from '@core/di/container';
 import { EventBus } from '@core/event-bus/event-bus';
 import { OutboxRepository } from '@core/outbox/outbox.repository';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
-import { EventRateLimiter, type RateLimitConfig } from '@core/consumer/rate-limiter';
+import { EventRateLimiter } from '@core/consumer/rate-limiter';
 import { ProcessedEventStore } from '@core/consumer/processed-event.schema';
 import { EventConsumer } from '@core/consumer/consumer';
 import { AmqpConsumer } from '@core/consumer/amqp-consumer';
@@ -16,7 +16,9 @@ import { PluginLoader, PluginGuard } from '@core/plugin-system/plugin-loader';
 import { ExternalServiceProxy } from '@core/external-integration/proxy';
 import { CacheService } from '@core/cache/cache.service';
 import { ArchitectureValidator } from '@core/architecture-validator/validator';
+import { ModuleRegistry } from '@core/module-registry/registry';
 import { ProductModule } from '@modules/product/product.module';
+import { OrderModule } from '@modules/order/order.module';
 import { AnalyticsPlugin } from '@plugins/analytics/analytics.plugin';
 import { requestIdMiddleware, snakeCaseMiddleware, snakeCaseResponseMiddleware, globalErrorHandler } from '@core/api/response';
 import { authMiddleware } from '@core/auth/auth.middleware';
@@ -69,21 +71,14 @@ async function bootstrap(): Promise<void> {
     const db = container.resolve<Db>('Database');
     return new OutboxRepository(db);
   }, ['Database']);
+  container.register('ModuleRegistry', () => new ModuleRegistry());
   container.register('EventBus', () => {
     const outboxRepo = container.resolve<OutboxRepository>('OutboxRepository');
     const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
     return new EventBus(outboxRepo, schemaRegistry);
   }, ['OutboxRepository', 'EventSchemaRegistry']);
   container.register('EventRateLimiter', () => {
-    const defaultRateLimits: RateLimitConfig[] = [
-      { eventType: 'product.created.v1', maxEventsPerSecond: 500 },
-      { eventType: 'product.updated.v1', maxEventsPerSecond: 500 },
-      { eventType: 'product.deactivated.v1', maxEventsPerSecond: 200 },
-      { eventType: 'order.created.v1', maxEventsPerSecond: 100 },
-      { eventType: 'order.completed.v1', maxEventsPerSecond: 100 },
-      { eventType: 'inventory.reserved.v1', maxEventsPerSecond: 200 },
-    ];
-    return new EventRateLimiter(defaultRateLimits);
+    return new EventRateLimiter([]);
   });
   container.register('ProcessedEventStore', () => {
     const db = container.resolve<Db>('Database');
@@ -110,9 +105,26 @@ async function bootstrap(): Promise<void> {
 
   // --- Validate DI graph ---
   const validator = container.resolve<ArchitectureValidator>('ArchitectureValidator');
+
+  // Build dependency graph from registered DI tokens
+  const tokens = container.getRegisteredTokens();
+  const graphNodes = tokens.map((t) => t.toLowerCase());
+  const graphEdges: { from: string; to: string }[] = [];
+  for (const token of tokens) {
+    const deps = container.getDependencies(token);
+    for (const dep of deps) {
+      graphEdges.push({ from: token.toLowerCase(), to: dep.toLowerCase() });
+    }
+  }
+
   await validator.validateOnStartup(
     container.getRegisteredTokens(),
     (token) => container.getDependencies(token),
+    {
+      dependencyGraph: { nodes: graphNodes, edges: graphEdges },
+      plugins: [],
+      serviceBindings: [],
+    },
   );
 
   // --- Rate limiter (before auth) ---
@@ -133,9 +145,28 @@ async function bootstrap(): Promise<void> {
   const db = container.resolve<Db>('Database');
   const eventBus = container.resolve<EventBus>('EventBus');
   const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
+  const moduleRegistry = container.resolve<ModuleRegistry>('ModuleRegistry');
+  const cacheService = container.resolve<CacheService>('CacheService');
 
   const productModule = new ProductModule({ db, eventBus, schemaRegistry });
   productModule.registerRoutes(app);
+  productModule.registerWithRegistry(
+    {
+      registerRateLimits: (mod, cfgs) => moduleRegistry.registerRateLimits(mod, cfgs),
+      registerEventHandler: (mod, type, handler) => moduleRegistry.registerEventHandler(mod, type, handler),
+    },
+    cacheService,
+  );
+
+  const orderModule = new OrderModule();
+  orderModule.registerWithRegistry({
+    registerRateLimits: (mod, cfgs) => moduleRegistry.registerRateLimits(mod, cfgs),
+  });
+
+  // Update EventRateLimiter with registered rate limits
+  container.register('EventRateLimiter', () => {
+    return new EventRateLimiter(moduleRegistry.getAllRateLimits());
+  });
 
   // --- Register plugins ---
   const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
@@ -150,15 +181,12 @@ async function bootstrap(): Promise<void> {
   }
 
   const eventConsumer = container.resolve<EventConsumer>('EventConsumer');
-  const cacheService = container.resolve<CacheService>('CacheService');
   analyticsPlugin.setEventConsumer(eventConsumer);
 
-  eventConsumer.registerHandler('product.updated.v1', async (event) => {
-    await cacheService.invalidate(`product:${event.aggregate_id}`);
-  });
-  eventConsumer.registerHandler('product.deactivated.v1', async (event) => {
-    await cacheService.invalidate(`product:${event.aggregate_id}`);
-  });
+  // Register event handlers from module registry
+  for (const reg of moduleRegistry.getEventHandlers()) {
+    eventConsumer.registerHandler(reg.eventType, reg.handler);
+  }
 
   const amqpConsumer = new AmqpConsumer(eventConsumer, {
     rabbitmqUrl: config.rabbitmq.url,

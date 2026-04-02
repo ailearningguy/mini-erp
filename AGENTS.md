@@ -51,7 +51,7 @@ Agent MUST classify every request:
 | PLAN | `engineering-software-architect` | Thiết kế architecture |
 | PLAN | `engineering-backend-architect` | Thiết kế API |
 | PLAN | `engineering-plugin-developer` | Plugin architecture design |
-| IMPLEMENT | `engineering-senior-developer` | Backend NestJS |
+| IMPLEMENT | `engineering-senior-developer` | Backend Express.js |
 | IMPLEMENT | `engineering-frontend-developer` | Frontend Next.js |
 | IMPLEMENT | `engineering-plugin-developer` | Plugin implementation |
 | IMPLEMENT | `engineering-security-engineer` | Auth/security |
@@ -83,7 +83,7 @@ Agent MUST classify every request:
 - Branch: `feat/{module}/{desc}`, `fix/{module}/{desc}`, `plugin/{name}/{desc}`
 - Worktree: `.worktrees/{branch-name}/`
 - Commit: `type(scope): description`
-- KHÔNG commit `.env`, `node_modules/`, `.next/`, `dist/`
+- KHÔNG commit `.env`, `node_modules/`, `dist/`
 - KHÔNG force push, amend trên main
 
 ---
@@ -92,9 +92,9 @@ Agent MUST classify every request:
 
 1. Update `specs/openapi.yaml` FIRST
 2. `npm run lint:spec`
-3. Implement backend (Swagger decorators match spec)
-4. `cd apps/shop && npm run generate:types`
-5. Implement frontend (use generated types)
+3. Implement backend (Express routes + Zod validation match spec)
+4. Implement frontend when available: generate types from spec, use generated types
+5. (Frontend `apps/` directory does not exist yet — skip step 4 for now)
 
 ---
 
@@ -148,12 +148,12 @@ Mỗi layer giữ convention riêng, convert tại boundary:
 
 ```
 Request:  Frontend (snake_case)
-    → SnakeCaseTransformPipe (global pipe, runs BEFORE ValidationPipe)
+    → snakeCaseMiddleware (global middleware, converts req.body keys to camelCase)
     → DTO (camelCase)
     → Controller/Service (camelCase)
 
 Response: Service/Entity (camelCase)
-    → SnakeCaseInterceptor (global interceptor)
+    → snakeCaseResponseMiddleware (global middleware, converts res.json keys to snake_case)
     → API response (snake_case)
     → Frontend (snake_case)
 
