@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 import {
   successResponse,
   errorResponse,
@@ -7,6 +7,7 @@ import {
   convertKeys,
 } from '@core/api/response';
 import { AppError, ErrorCode } from '@shared/errors';
+import { ZodError, z } from 'zod';
 
 describe('response utilities', () => {
   describe('camelCase', () => {
@@ -73,6 +74,44 @@ describe('response utilities', () => {
       const result = errorResponse(new Error('boom'), 'req-abc');
       expect(result.error.code).toBe(ErrorCode.INTERNAL_ERROR);
       expect(result.error.message).toBe('An unexpected error occurred');
+    });
+  });
+
+  describe('globalErrorHandler', () => {
+    function createReq() {
+      return { id: 'req-123' } as any;
+    }
+    function createRes() {
+      const res: any = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
+      return res;
+    }
+
+    it('should return 400 for ZodError', () => {
+      const schema = z.object({ name: z.string() });
+      let zodError: ZodError;
+      try {
+        schema.parse({ name: 123 });
+      } catch (err) {
+        zodError = err as ZodError;
+      }
+      const req = createReq();
+      const res = createRes();
+      const next = jest.fn();
+
+      const { globalErrorHandler } = require('@core/api/response');
+      globalErrorHandler(zodError!, req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            code: 'VALIDATION_ERROR',
+          }),
+        }),
+      );
     });
   });
 });

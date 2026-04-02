@@ -52,6 +52,35 @@ describe('EventRateLimiter', () => {
     expect(limiter.checkLimit('product.created.v1')).toBe(false);
     expect(limiter.checkLimit('order.created.v1')).toBe(true);
   });
+
+  describe('updateConfigs', () => {
+    it('should add new rate limit configs after initialization', () => {
+      const limiter = new EventRateLimiter([]);
+      expect(limiter.checkLimit('product.created.v1')).toBe(true);
+
+      limiter.updateConfigs([
+        { eventType: 'product.created.v1', maxEventsPerSecond: 2 },
+      ]);
+
+      expect(limiter.checkLimit('product.created.v1')).toBe(true);
+      expect(limiter.checkLimit('product.created.v1')).toBe(true);
+      expect(limiter.checkLimit('product.created.v1')).toBe(false);
+    });
+
+    it('should not reset existing buckets when updating', () => {
+      const limiter = new EventRateLimiter([
+        { eventType: 'order.created.v1', maxEventsPerSecond: 1 },
+      ]);
+      expect(limiter.checkLimit('order.created.v1')).toBe(true);
+      expect(limiter.checkLimit('order.created.v1')).toBe(false);
+
+      limiter.updateConfigs([
+        { eventType: 'product.created.v1', maxEventsPerSecond: 500 },
+      ]);
+
+      expect(limiter.checkLimit('order.created.v1')).toBe(false);
+    });
+  });
 });
 
 describe('Core Independence — rate-limiter', () => {

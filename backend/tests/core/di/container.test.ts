@@ -36,6 +36,21 @@ describe('DIContainer', () => {
     expect(container.getRegisteredTokens()).toEqual(['A', 'B']);
   });
 
+  describe('get alias', () => {
+    it('should resolve services via get() method', () => {
+      container.register('MyService', () => ({ name: 'test' }));
+      const result = container.get<{ name: string }>('MyService');
+      expect(result.name).toBe('test');
+    });
+
+    it('should return same singleton via get() and resolve()', () => {
+      container.register('MyService', () => ({ name: 'test' }));
+      const viaGet = container.get('MyService');
+      const viaResolve = container.resolve('MyService');
+      expect(viaGet).toBe(viaResolve);
+    });
+  });
+
   describe('validateGraph', () => {
     it('should detect cycles via deps array without calling factories', () => {
       container.register('A', () => ({}), ['B']);

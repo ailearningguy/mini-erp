@@ -1,4 +1,4 @@
-import { eq, gt, and, gte, lte } from 'drizzle-orm';
+import { eq, gt, and, gte, lte, count } from 'drizzle-orm';
 import { analyticsEvents } from './analytics.schema';
 import type { AnalyticsQuery } from './dto/analytics-query.dto';
 import type { EventEnvelope } from '@shared/types/event';
@@ -48,8 +48,8 @@ export class AnalyticsService {
 
   async getEventCount(): Promise<number> {
     const result = await this.db
-      .select({ count: analyticsEvents.id })
+      .select({ count: count() })
       .from(analyticsEvents);
-    return result.length;
+    return Number(result[0]?.count ?? 0);
   }
 }

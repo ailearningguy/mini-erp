@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
+import { ZodError } from 'zod';
 import { AppError, ErrorCode } from '@shared/errors';
 import { API_CONSTANTS } from '@shared/constants';
 
@@ -93,6 +94,19 @@ function errorResponse(error: unknown, requestId: string): ApiErrorResponse {
 
 function globalErrorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   const requestId = req.id ?? 'unknown';
+
+  if (err instanceof ZodError) {
+    const validationError = new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      'Validation failed',
+      400,
+      { issues: err.issues },
+    );
+    const response = errorResponse(validationError, requestId);
+    res.status(400).json(response);
+    return;
+  }
+
   const response = errorResponse(err, requestId);
 
   let status = 500;

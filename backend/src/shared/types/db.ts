@@ -1,8 +1,8 @@
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
-export type Db = PostgresJsDatabase<Record<string, unknown>>;
+export type Db = NodePgDatabase<Record<string, unknown>>;
 
-export type Transaction = PostgresJsDatabase<Record<string, unknown>>;
+export type Transaction = NodePgDatabase<Record<string, unknown>>;
 
 export type AnyDb = Record<string, unknown>;
 

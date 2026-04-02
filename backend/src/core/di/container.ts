@@ -103,6 +103,10 @@ class DIContainer {
     }
   }
 
+  get<T>(token: string): T {
+    return this.resolve<T>(token);
+  }
+
   validateGraph(): void {
     const cycles: string[][] = [];
     const visited = new Set<string>();

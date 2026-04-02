@@ -24,6 +24,7 @@ import { SagaOrchestrator } from '@core/saga/saga-orchestrator';
 import { AnalyticsPlugin } from '@plugins/analytics/analytics.plugin';
 import { requestIdMiddleware, snakeCaseMiddleware, snakeCaseResponseMiddleware, globalErrorHandler } from '@core/api/response';
 import { authMiddleware } from '@core/auth/auth.middleware';
+import { TokenRevocationService } from '@core/auth/token-revocation.service';
 import { createIdempotencyMiddleware } from '@core/idempotency/idempotency.middleware';
 import { ApiIdempotencyStore } from '@core/idempotency/api-idempotency';
 import { createRateLimiter } from '@core/api/rate-limiter';
@@ -100,6 +101,9 @@ async function bootstrap(): Promise<void> {
     const db = container.resolve<Db>('Database');
     return new ProcessedEventStore(db);
   }, ['Database']);
+  container.register('EventRateLimiter', () => {
+    return new EventRateLimiter([]);
+  });
   container.register('EventConsumer', () => {
     const processedStore = container.resolve<ProcessedEventStore>('ProcessedEventStore');
     const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
@@ -159,8 +163,11 @@ async function bootstrap(): Promise<void> {
   const queueManager = new QueueManager(redis);
   logger.info('QueueManager initialized');
 
+  // --- TokenRevocationService ---
+  const tokenRevocationService = new TokenRevocationService(redis as any);
+
   // --- Auth (after rate limiter + idempotency) ---
-  app.use('/api', authMiddleware(config));
+  app.use('/api', authMiddleware(config, tokenRevocationService));
 
   // --- Register modules ---
   const db = container.resolve<Db>('Database');
@@ -184,10 +191,9 @@ async function bootstrap(): Promise<void> {
     registerRateLimits: (mod, cfgs) => moduleRegistry.registerRateLimits(mod, cfgs),
   });
 
-  // Update EventRateLimiter with registered rate limits
-  container.register('EventRateLimiter', () => {
-    return new EventRateLimiter(moduleRegistry.getAllRateLimits());
-  });
+  // Update EventRateLimiter with registered rate limits from modules
+  const eventRateLimiter = container.resolve<EventRateLimiter>('EventRateLimiter');
+  eventRateLimiter.updateConfigs(moduleRegistry.getAllRateLimits());
 
   // --- Register plugins ---
   const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
@@ -263,7 +269,7 @@ async function bootstrap(): Promise<void> {
   await amqpConsumer.start();
 
   // --- SoftRestartManager ---
-  const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
+  // pluginLoader already resolved at line 193
   const softRestartManager = new SoftRestartManager(
     trafficGate,
     requestTracker,

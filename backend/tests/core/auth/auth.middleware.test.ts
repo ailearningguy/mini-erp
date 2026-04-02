@@ -1,5 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { authMiddleware } from '@core/auth/auth.middleware';
+import { TokenRevocationService } from '@core/auth/token-revocation.service';
 
 const mockConfig = {
   jwt: { publicKey: 'test-key', privateKey: 'test', accessTokenTtl: '15m', refreshTokenTtl: '7d' },
@@ -65,5 +66,30 @@ describe('authMiddleware (factory)', () => {
     const next = jest.fn();
 
     await expect(middleware(req, res, next)).rejects.toThrow('revoked');
+  });
+});
+
+describe('TokenRevocationService integration', () => {
+  it('should detect revoked tokens via Redis', async () => {
+    const mockRedis = {
+      get: jest.fn<(...args: any[]) => any>().mockResolvedValue('1'),
+      set: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+      del: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+    };
+    const service = new TokenRevocationService(mockRedis as any);
+    const result = await service.isRevoked('some-token');
+    expect(result).toBe(true);
+    expect(mockRedis.get).toHaveBeenCalled();
+  });
+
+  it('should return false for non-revoked tokens', async () => {
+    const mockRedis = {
+      get: jest.fn<(...args: any[]) => any>().mockResolvedValue(null),
+      set: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+      del: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+    };
+    const service = new TokenRevocationService(mockRedis as any);
+    const result = await service.isRevoked('valid-token');
+    expect(result).toBe(false);
   });
 });

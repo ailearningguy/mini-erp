@@ -51,6 +51,17 @@ class EventRateLimiter {
     if (!limiter) return true;
     return limiter.tryConsume();
   }
+
+  updateConfigs(configs: RateLimitConfig[]): void {
+    for (const cfg of configs) {
+      if (!this.limiters.has(cfg.eventType)) {
+        this.limiters.set(
+          cfg.eventType,
+          new TokenBucket(cfg.maxEventsPerSecond, cfg.maxEventsPerSecond, cfg.burstAllowance),
+        );
+      }
+    }
+  }
 }
 
 export { EventRateLimiter, TokenBucket };
