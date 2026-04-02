@@ -10,9 +10,17 @@ interface EventHandlerRegistration {
   moduleName: string;
 }
 
+interface ActiveModule {
+  name: string;
+  version: string;
+  enabled: boolean;
+  dependencies: string[];
+}
+
 class ModuleRegistry {
   private rateLimits: RateLimitConfig[] = [];
   private eventHandlers: EventHandlerRegistration[] = [];
+  private activeModules: ActiveModule[] = [];
 
   registerRateLimits(_moduleName: string, configs: RateLimitConfig[]): void {
     for (const cfg of configs) {
@@ -34,7 +42,19 @@ class ModuleRegistry {
   getEventHandlers(): EventHandlerRegistration[] {
     return [...this.eventHandlers];
   }
+
+  setActiveModules(modules: ActiveModule[]): void {
+    this.activeModules = modules;
+  }
+
+  getActive(): ActiveModule[] {
+    return this.activeModules.filter((m) => m.enabled);
+  }
+
+  getByName(name: string): ActiveModule | undefined {
+    return this.activeModules.find((m) => m.name === name);
+  }
 }
 
 export { ModuleRegistry };
-export type { EventHandlerRegistration };
+export type { EventHandlerRegistration, ActiveModule };
