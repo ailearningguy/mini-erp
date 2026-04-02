@@ -104,7 +104,6 @@ async function bootstrap(): Promise<void> {
   });
   container.registerCore('HookExecutor', {
     useFactory: (c) => new HookExecutor(c.get('HookRegistry'), logger),
-    deps: ['HookRegistry'],
   });
   container.registerCore('IHookExecutor', {
     useFactory: (c) => c.get('HookExecutor'),
