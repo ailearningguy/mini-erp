@@ -11,6 +11,12 @@ interface CapabilityHandlerStub {
   handle: (ctx: any) => Promise<void>;
 }
 
+interface CapabilityRequirementStub {
+  name: string;
+  versionRange: string;
+  mode: 'required' | 'optional';
+}
+
 interface ServiceRegistration<T = unknown> {
   factory: Factory<T>;
   singleton: boolean;
@@ -34,6 +40,7 @@ interface ModuleDefinition {
   exports?: string[];
   hooks?: HookRegistration[];
   capabilities?: CapabilityHandlerStub[];
+  requires?: CapabilityRequirementStub[];
 }
 
 interface ProviderRegistration<T = unknown> {
@@ -94,6 +101,7 @@ class DIContainer {
   private buildMutex: Promise<void> = Promise.resolve();
   private pendingHooks: HookRegistration[] = [];
   private pendingCapabilities: CapabilityHandlerStub[] = [];
+  private pendingRequirements: CapabilityRequirementStub[] = [];
   private exportedTokens = new Map<string, string>();
 
   setActor(actor: string): void {
@@ -303,6 +311,10 @@ class DIContainer {
           this.pendingCapabilities.push(...def.capabilities);
         }
 
+        if (def.requires) {
+          this.pendingRequirements.push(...def.requires);
+        }
+
         this.modules.push(def.module);
       }
 
@@ -337,6 +349,15 @@ class DIContainer {
         }
       }
       this.pendingCapabilities = [];
+
+      if (this.pendingRequirements.length > 0) {
+        const governanceRegistry = this.coreInstances.get('CapabilityGovernanceRegistry') as import('@core/capability-governance/governance-registry').CapabilityGovernanceRegistry | undefined;
+        if (governanceRegistry) {
+          const { validateRequirements } = await import('@core/capability-governance/version-resolver');
+          validateRequirements(this.pendingRequirements, governanceRegistry);
+        }
+        this.pendingRequirements = [];
+      }
 
       this.containerState = 'READY';
     } catch (err) {
