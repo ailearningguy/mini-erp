@@ -17,9 +17,10 @@ interface AmqpChannel {
   assertExchange(exchange: string, type: string, options?: Record<string, unknown>): Promise<void>;
   assertQueue(queue: string, options?: Record<string, unknown>): Promise<{ queue: string }>;
   bindQueue(queue: string, exchange: string, pattern: string): Promise<void>;
-  consume(queue: string, callback: (msg: AmqpMessage | null) => void): void;
+  consume(queue: string, callback: (msg: AmqpMessage | null) => void): { consumerTag: string };
   ack(message: AmqpMessage): void;
   nack(message: AmqpMessage, allUpTo?: boolean, requeue?: boolean): void;
+  cancel(consumerTag: string): Promise<void>;
   close(): Promise<void>;
   prefetch(count: number): void;
 }
@@ -38,6 +39,8 @@ class AmqpConsumer {
   private connection: AmqpConnection | null = null;
   private channel: AmqpChannel | null = null;
   private _running = false;
+  private paused = false;
+  private consumerTag: string | null = null;
 
   constructor(
     private readonly eventConsumer: EventConsumerLike,
@@ -76,9 +79,12 @@ class AmqpConsumer {
       throw new Error('AmqpConsumer not connected. Call connect() first.');
     }
 
-    this.channel.consume(this.config.queue, async (msg: AmqpMessage | null) => {
+    const result = this.channel.consume(this.config.queue, async (msg: AmqpMessage | null) => {
       if (!msg) return;
-
+      if (this.paused) {
+        this.channel!.nack(msg, false, true);
+        return;
+      }
       try {
         const rawEvent = JSON.parse(msg.content.toString());
         await this.eventConsumer.consume(rawEvent);
@@ -89,7 +95,42 @@ class AmqpConsumer {
       }
     });
 
+    this.consumerTag = result.consumerTag;
     logger.info('AMQP consumer started, waiting for messages');
+  }
+
+  async pause(): Promise<void> {
+    if (!this.channel || !this.consumerTag) {
+      this.paused = true;
+      return;
+    }
+    this.paused = true;
+    await this.channel.cancel(this.consumerTag);
+    this.consumerTag = null;
+    logger.info('AMQP consumer paused');
+  }
+
+  async resume(): Promise<void> {
+    if (!this.channel) {
+      this.paused = false;
+      return;
+    }
+    if (!this.paused) return;
+
+    this.paused = false;
+    const result = this.channel.consume(this.config.queue, async (msg: AmqpMessage | null) => {
+      if (!msg) return;
+      try {
+        const rawEvent = JSON.parse(msg.content.toString());
+        await this.eventConsumer.consume(rawEvent);
+        this.channel!.ack(msg);
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to process message');
+        this.channel!.nack(msg, false, true);
+      }
+    });
+    this.consumerTag = result.consumerTag;
+    logger.info('AMQP consumer resumed');
   }
 
   async shutdown(): Promise<void> {
