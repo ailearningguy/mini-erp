@@ -1,9 +1,7 @@
 import type { PluginFactory, PluginDefinition } from '@core/plugin-registry/types';
 import type { DIContainer } from '@core/di/container';
 import type { Db } from '@shared/types/db';
-import type { EventConsumer } from '@core/consumer/consumer';
 import { AnalyticsPlugin } from './analytics.plugin';
-import { AnalyticsModule } from './analytics.module';
 import { analyticsEvents } from './analytics.schema';
 import type { Express } from 'express';
 import type { EventEnvelope } from '@shared/types/event';
@@ -14,7 +12,6 @@ const log = createChildLogger({ plugin: 'analytics' });
 const analyticsPluginFactory: PluginFactory = {
   async create(container: DIContainer): Promise<PluginDefinition> {
     const db = container.get<Db>('Database');
-    const eventConsumer = container.get<EventConsumer>('EventConsumer');
 
     const plugin = new AnalyticsPlugin(db);
     const analyticsModule = plugin.getModule();
