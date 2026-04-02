@@ -10,15 +10,20 @@ const log = createChildLogger({ plugin: 'analytics' });
 const analyticsPermissions: PluginPermission[] = [
   { resource: 'product', actions: ['read'] },
   { resource: 'order', actions: ['read'] },
-  { resource: 'external:email', actions: ['call'] },
   { resource: 'plugin_analytics_*', actions: ['read', 'write'] },
 ];
 
 class AnalyticsPlugin implements IPlugin {
   private module: AnalyticsModule | null = null;
+  private db: unknown;
 
   constructor(db: Db) {
     this.module = new AnalyticsModule(db);
+    this.db = db;
+  }
+
+  init(db: unknown): void {
+    this.db = db;
   }
 
   getMetadata(): PluginMetadata {
@@ -71,6 +76,7 @@ class AnalyticsPlugin implements IPlugin {
 
   async dispose(): Promise<void> {
     log.info('Plugin disposed');
+    this.module = null;
   }
 
   isActive(): boolean {

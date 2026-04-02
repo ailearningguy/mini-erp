@@ -55,6 +55,7 @@ interface ModuleDefinition {
   contracts?: CapabilityContractStub[];
   requires?: CapabilityRequirementStub[];
   schemas?: Record<string, unknown>;
+  routes?: (app: unknown) => void;
 }
 
 interface ProviderRegistration<T = unknown> {
@@ -334,6 +335,13 @@ class DIContainer {
           this.pendingContracts.push(...def.contracts);
         }
 
+        if (def.routes) {
+          const app = this.coreInstances.get('ExpressApp');
+          if (app) {
+            def.routes(app);
+          }
+        }
+
         this.modules.push(def.module);
       }
 
@@ -469,6 +477,14 @@ class DIContainer {
 
   getExportedTokens(): Map<string, string> {
     return new Map(this.exportedTokens);
+  }
+
+  getActiveModules(): { name: string; version: string; enabled: boolean }[] {
+    return this.modules.map(m => ({
+      name: m.name,
+      version: '1.0.0',
+      enabled: true,
+    }));
   }
 
   getPendingHooks(): HookRegistration[] {

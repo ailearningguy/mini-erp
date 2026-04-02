@@ -1,6 +1,6 @@
 {
   "name": "analytics",
-  "version": "2026.04.01",
+  "version": "2026.04.02",
   "description": "Tracks domain events for analytics dashboards",
   "entry": "./dist/index.js",
   "dependencies": {

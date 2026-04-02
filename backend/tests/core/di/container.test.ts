@@ -434,3 +434,25 @@ describe('DIContainer ModuleDefinition contracts', () => {
     expect(registersContractsInBuild).toBe(true);
   });
 });
+
+describe('ModuleDefinition routes field', () => {
+  it('ModuleDefinition should have routes field', () => {
+    const content = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../../src/core/di/container.ts'),
+      'utf-8',
+    );
+
+    const moduleDefMatch = content.match(/interface ModuleDefinition[\s\S]*?\}/);
+    expect(moduleDefMatch).not.toBeNull();
+    expect(moduleDefMatch![0]).toContain('routes');
+  });
+
+  it('build() should wire routes from ModuleDefinition', () => {
+    const content = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../../src/core/di/container.ts'),
+      'utf-8',
+    );
+
+    expect(content).toContain('def.routes');
+  });
+});

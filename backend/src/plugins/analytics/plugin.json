@@ -10,7 +10,6 @@
   "permissions": [
     { "resource": "product", "actions": ["read"] },
     { "resource": "order", "actions": ["read"] },
-    { "resource": "external:email", "actions": ["call"] },
     { "resource": "plugin_analytics_*", "actions": ["read", "write"] }
   ]
 }

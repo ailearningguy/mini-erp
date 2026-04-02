@@ -23,6 +23,8 @@ interface PluginMetadata {
 interface IPlugin {
   getMetadata(): PluginMetadata;
   getModules(): unknown[];
+
+  init(db: unknown): void;
   onActivate(): Promise<void>;
   onDeactivate(): Promise<void>;
   onInstall?(): Promise<void>;
@@ -46,6 +48,15 @@ interface PluginRegistration {
 
 class PluginLoader {
   private plugins = new Map<string, PluginRegistration>();
+  private db: unknown;
+
+  constructor(db?: unknown) {
+    this.db = db;
+  }
+
+  setDb(db: unknown): void {
+    this.db = db;
+  }
 
   async register(plugin: IPlugin): Promise<void> {
     const metadata = plugin.getMetadata();
@@ -84,6 +95,9 @@ class PluginLoader {
     }
 
     try {
+      if (this.db) {
+        registration.plugin.init(this.db);
+      }
       await registration.plugin.onActivate();
       registration.status = PluginStatus.ACTIVE;
       registration.activatedAt = new Date();

@@ -229,11 +229,34 @@ async function bootstrap(): Promise<void> {
 
   await fsPluginRegistry.refresh();
 
+  const pluginConfigPath = path.join(__dirname, '..', 'config', 'plugins.json');
+  let pluginConfig: Record<string, { enabled: boolean; config?: Record<string, unknown> }> = {};
+  try {
+    const configContent = await import('node:fs/promises').then(fs => fs.readFile(pluginConfigPath, 'utf-8'));
+    const parsed = JSON.parse(configContent as string);
+    pluginConfig = parsed.plugins ?? {};
+    logger.info({ plugins: Object.keys(pluginConfig) }, 'Plugin config loaded');
+  } catch {
+    logger.warn('No plugins.json found, using defaults');
+  }
+
   const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
+  const db = container.resolve<Db>('Database');
+  pluginLoader.setDb(db);
 
   for (const pluginMeta of fsPluginRegistry.getActive()) {
+    const pcfg = pluginConfig[pluginMeta.name];
+    if (pcfg && !pcfg.enabled) {
+      logger.info({ plugin: pluginMeta.name }, 'Plugin disabled via config, skipping');
+      continue;
+    }
+
     const factory = await pluginMeta.entry();
     const pluginDef = await factory.default.create(container);
+
+    if (pcfg?.config && pluginDef.plugin.setConfig) {
+      pluginDef.plugin.setConfig(pcfg.config);
+    }
 
     await pluginLoader.register(pluginDef.plugin);
     await pluginLoader.activate(pluginMeta.name);

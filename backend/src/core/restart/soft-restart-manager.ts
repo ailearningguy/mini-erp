@@ -24,7 +24,7 @@ class SoftRestartManager {
   ) {}
 
   private getActivePlugins(): ModuleMetadata[] {
-    return [];
+    return this.container.getActiveModules() as ModuleMetadata[];
   }
 
   async restart(reason: string): Promise<void> {

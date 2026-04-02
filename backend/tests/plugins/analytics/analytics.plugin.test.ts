@@ -65,6 +65,6 @@ describe('AnalyticsPlugin', () => {
 
   it('should dispose and clean up', async () => {
     await plugin.dispose();
-    expect(plugin.getModule()).not.toBeNull();
+    expect(plugin.getModule()).toBeNull();
   });
 });
