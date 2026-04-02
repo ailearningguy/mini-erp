@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { DIContainer, IModule, ModuleFactory, ModuleMetadata } from '@core/di/container';
+import type { HookRegistry } from '@core/hooks/hook-registry';
 
 describe('IModule interface contract', () => {
   it('should require name, onInit, and onDestroy', async () => {
@@ -316,6 +317,95 @@ describe('DIContainer', () => {
       await testContainer.dispose();
 
       expect(mockEventConsumer.unregisterAll).toHaveBeenCalled();
+    });
+  });
+
+  describe('DIContainer hook integration', () => {
+    it('should register hooks from ModuleDefinition during build', async () => {
+      const testContainer = new DIContainer();
+      testContainer.registerCore('HookRegistry', {
+        useFactory: () => {
+          const { HookRegistry } = require('@core/hooks/hook-registry');
+          return new HookRegistry();
+        },
+      });
+
+      const hookHandler = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+
+      const mockFactory: any = {
+        create: async () => ({
+          module: {
+            name: 'test',
+            onInit: async () => {},
+            onDestroy: async () => {},
+          },
+          providers: [],
+          exports: ['ITestService'],
+          hooks: [
+            {
+              point: 'order.beforeCreate',
+              phase: 'pre',
+              handler: hookHandler,
+              module: 'test',
+              priority: 50,
+            },
+          ],
+        }),
+      };
+
+      const metadata: any = {
+        name: 'test',
+        version: '2026.04.01',
+        enabled: true,
+        dependencies: [],
+        entry: async () => ({ default: mockFactory }),
+        manifest: { name: 'test', version: '2026.04.01', enabled: true },
+      };
+
+      await testContainer.build([metadata]);
+
+      const { HookRegistry } = require('@core/hooks/hook-registry');
+      const registry = testContainer.get<HookRegistry>('HookRegistry');
+      const hooks = registry.getHooks('order.beforeCreate', 'pre');
+
+      expect(hooks).toHaveLength(1);
+      expect(hooks[0].module).toBe('test');
+      expect(hooks[0].priority).toBe(50);
+    });
+
+    it('should clear hooks by module on dispose', async () => {
+      const testContainer = new DIContainer();
+      testContainer.registerCore('HookRegistry', {
+        useFactory: () => {
+          const { HookRegistry } = require('@core/hooks/hook-registry');
+          return new HookRegistry();
+        },
+      });
+
+      const mockFactory: any = {
+        create: async () => ({
+          module: { name: 'test', onInit: async () => {}, onDestroy: async () => {} },
+          providers: [],
+          exports: ['ITestService'],
+          hooks: [
+            { point: 'order.beforeCreate', phase: 'pre', handler: async () => {}, module: 'test' },
+          ],
+        }),
+      };
+
+      await testContainer.build([{
+        name: 'test', version: '2026.04.01', enabled: true, dependencies: [],
+        entry: async () => ({ default: mockFactory }),
+        manifest: { name: 'test', version: '2026.04.01', enabled: true },
+      }]);
+
+      const { HookRegistry } = require('@core/hooks/hook-registry');
+      const registry = testContainer.get<HookRegistry>('HookRegistry');
+      expect(registry.getHooks('order.beforeCreate', 'pre')).toHaveLength(1);
+
+      await testContainer.dispose();
+
+      expect(registry.getHooks('order.beforeCreate', 'pre')).toHaveLength(0);
     });
   });
 });

@@ -305,6 +305,14 @@ class DIContainer {
         }
       }
 
+      const hookRegistry = this.coreInstances.get('HookRegistry') as import('@core/hooks/hook-registry').HookRegistry | undefined;
+      if (hookRegistry) {
+        for (const hook of this.pendingHooks) {
+          hookRegistry.register(hook);
+        }
+      }
+      this.pendingHooks = [];
+
       this.containerState = 'READY';
     } catch (err) {
       this.containerState = 'IDLE';
@@ -343,6 +351,13 @@ class DIContainer {
           } catch (err) {
             console.error(`Dispose error for "${_token}":`, err);
           }
+        }
+      }
+
+      const hookRegistry = this.coreInstances.get('HookRegistry') as import('@core/hooks/hook-registry').HookRegistry | undefined;
+      if (hookRegistry) {
+        for (const mod of this.modules) {
+          hookRegistry.clearByModule(mod.name);
         }
       }
 
@@ -497,6 +512,13 @@ class DIContainer {
     for (const [token, instance] of this.moduleInstances) {
       if (isDisposable(instance)) {
         try { await instance.dispose(); } catch (err) { console.error(`Dispose error for "${token}":`, err); }
+      }
+    }
+
+    const hookRegistry = this.coreInstances.get('HookRegistry') as import('@core/hooks/hook-registry').HookRegistry | undefined;
+    if (hookRegistry) {
+      for (const mod of this.modules) {
+        hookRegistry.clearByModule(mod.name);
       }
     }
 
