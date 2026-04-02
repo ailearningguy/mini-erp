@@ -13,6 +13,7 @@ const config: Config = {
     '^@modules/(.*)$': '<rootDir>/src/modules/$1',
     '^@plugins/(.*)$': '<rootDir>/src/plugins/$1',
     '^@shared/(.*)$': '<rootDir>/src/shared/$1',
+    '(.*)scripts/eslint-rules.js$': '<rootDir>/scripts/eslint-rules.js',
   },
   transform: {
     '^.+\\.ts$': [

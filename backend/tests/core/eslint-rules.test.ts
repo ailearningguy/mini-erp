@@ -32,3 +32,23 @@ describe('ESLint config scoping', () => {
     expect(config).toContain("src/plugins/**/*.ts");
   });
 });
+
+describe('no-core-import-from-module rule', () => {
+  it('should have no-core-import-from-module rule defined', () => {
+    const rulesContent = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../scripts/eslint-rules.js'),
+      'utf-8',
+    );
+    expect(rulesContent).toContain("'no-core-import-from-module'");
+    expect(rulesContent).toContain("Core cannot import from modules");
+  });
+
+  it('should have no-cross-module-type-import rule defined', () => {
+    const rulesContent = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../scripts/eslint-rules.js'),
+      'utf-8',
+    );
+    expect(rulesContent).toContain("'no-cross-module-type-import'");
+    expect(rulesContent).toContain("cannot type-import");
+  });
+});

@@ -242,6 +242,62 @@ const RULES = {
       };
     },
   },
+
+  'no-core-import-from-module': {
+    meta: {
+      type: 'problem',
+      docs: { description: 'Forbid core files from importing from modules' },
+      schema: [],
+    },
+    create(context) {
+      const filename = context.getFilename();
+      if (!filename.includes('/src/core/')) return {};
+
+      return {
+        ImportDeclaration(node) {
+          const importPath = node.source.value;
+          if (typeof importPath === 'string' && (importPath.startsWith('@modules/') || importPath.includes('/modules/'))) {
+            context.report({
+              node,
+              message: `Core cannot import from modules. Found: "${importPath}". Core must be module-independent.`,
+            });
+          }
+        },
+      };
+    },
+  },
+
+  'no-cross-module-type-import': {
+    meta: {
+      type: 'problem',
+      docs: { description: 'Forbid type imports from other modules' },
+      schema: [],
+    },
+    create(context) {
+      const filename = context.getFilename();
+      const moduleMatch = filename.match(/src\/modules\/([^/]+)\//);
+      if (!moduleMatch) return {};
+
+      const currentModule = moduleMatch[1];
+
+      return {
+        ImportDeclaration(node) {
+          const importPath = node.source.value;
+          if (typeof importPath !== 'string') return;
+
+          const importedModuleMatch = importPath.match(/@modules\/([^/]+)\//);
+          if (importedModuleMatch && importedModuleMatch[1] !== currentModule) {
+            if (node.importKind === 'type') {
+              context.report({
+                node,
+                message: `Module "${currentModule}" cannot type-import from module "${importedModuleMatch[1]}". Move the interface to @shared/contracts/ instead.`,
+              });
+            }
+          }
+        },
+      };
+    },
+  },
 };
 
 export default RULES;

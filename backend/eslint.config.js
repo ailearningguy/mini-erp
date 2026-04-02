@@ -19,6 +19,7 @@ export default tseslint.config(
     rules: {
       'erp-architecture/no-cross-module-import': 'error',
       'erp-architecture/no-plugin-import-from-module': 'error',
+      'erp-architecture/no-cross-module-type-import': 'error',
     },
   },
   {
@@ -34,6 +35,7 @@ export default tseslint.config(
       'erp-architecture/no-domain-keyword': 'error',
       'erp-architecture/no-domain-enum': 'error',
       'erp-architecture/no-outbox-direct-access': 'error',
+      'erp-architecture/no-core-import-from-module': 'error',
     },
   },
   {
