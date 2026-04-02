@@ -1,5 +1,6 @@
 import express from 'express';
 import helmet from 'helmet';
+import * as path from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import Redis from 'ioredis';
@@ -35,6 +36,8 @@ import { TrafficGate } from '@core/traffic/traffic-gate';
 import { RequestTracker } from '@core/traffic/request-tracker';
 import { SystemStateManager } from '@core/restart/system-state';
 import { SoftRestartManager } from '@core/restart/soft-restart-manager';
+import { ModuleInstaller } from '@core/module-installer/module-installer';
+import { createModuleRoutes } from '@core/module-installer/module.routes';
 import type { Db } from '@shared/types/db';
 
 async function bootstrap(): Promise<void> {
@@ -271,6 +274,16 @@ async function bootstrap(): Promise<void> {
     logger,
   );
   logger.info('SoftRestartManager initialized');
+
+  // --- Module Installer & Routes ---
+  const moduleInstaller = new ModuleInstaller(
+    moduleRegistry,
+    softRestartManager,
+    path.join(__dirname, 'modules'),
+    logger,
+  );
+  app.use('/api/v1', createModuleRoutes(moduleInstaller));
+  logger.info('ModuleInstaller and routes initialized');
 
   // --- Health check ---
   app.get('/health/liveness', (_req, res) => {
