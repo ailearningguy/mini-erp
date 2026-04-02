@@ -1,0 +1,7 @@
+{
+  "name": "inventory",
+  "version": "2026.04.01",
+  "enabled": true,
+  "dependencies": [],
+  "description": "Inventory management with stock reservation"
+}
