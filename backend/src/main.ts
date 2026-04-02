@@ -42,7 +42,6 @@ import type { Db } from '@shared/types/db';
 import { HookRegistry, HookExecutor, detectHookConflicts } from '@core/hooks';
 import { CapabilityExecutor, validateCapabilities } from '@core/capability';
 import { CapabilityGovernanceRegistry, checkDeprecations } from '@core/capability-governance';
-import { pricingContract, pricingCapability } from '@modules/product/capabilities/pricing.capability';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -205,8 +204,6 @@ async function bootstrap(): Promise<void> {
   detectHookConflicts(hookRegistry.getAllHooks());
 
   const capabilityRegistry = container.get<CapabilityGovernanceRegistry>('CapabilityGovernanceRegistry');
-  capabilityRegistry.registerCapability(pricingCapability);
-  capabilityRegistry.registerContract(pricingContract);
   validateCapabilities(capabilityRegistry);
   checkDeprecations(capabilityRegistry.getAllContracts());
 
@@ -299,6 +296,7 @@ async function bootstrap(): Promise<void> {
   }
 
   const eventConsumer = container.resolve<EventConsumer>('EventConsumer');
+  const db = container.resolve<Db>('Database');
 
   // --- Wire Saga Orchestrator ---
   const sagaOrchestrator = new SagaOrchestrator(db);
@@ -329,7 +327,7 @@ async function bootstrap(): Promise<void> {
 
   // --- Module Installer & Routes ---
   const moduleInstaller = new ModuleInstaller(
-    moduleRegistry,
+    fsRegistry,
     softRestartManager,
     path.join(__dirname, 'modules'),
     logger,

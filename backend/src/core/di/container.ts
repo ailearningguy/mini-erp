@@ -17,6 +17,18 @@ interface CapabilityRequirementStub {
   mode: 'required' | 'optional';
 }
 
+interface CapabilityContractStub {
+  name: string;
+  version: string;
+  type: 'pipeline' | 'single' | 'composable';
+  stages?: string[];
+  compatibility: {
+    backwardCompatible: boolean;
+  };
+  deprecated?: boolean;
+  sunsetDate?: string;
+}
+
 interface ServiceRegistration<T = unknown> {
   factory: Factory<T>;
   singleton: boolean;
@@ -40,6 +52,7 @@ interface ModuleDefinition {
   exports?: string[];
   hooks?: HookRegistration[];
   capabilities?: CapabilityHandlerStub[];
+  contracts?: CapabilityContractStub[];
   requires?: CapabilityRequirementStub[];
   schemas?: Record<string, unknown>;
 }
@@ -103,6 +116,7 @@ class DIContainer {
   private pendingHooks: HookRegistration[] = [];
   private pendingCapabilities: CapabilityHandlerStub[] = [];
   private pendingRequirements: CapabilityRequirementStub[] = [];
+  private pendingContracts: CapabilityContractStub[] = [];
   private exportedTokens = new Map<string, string>();
 
   setActor(actor: string): void {
@@ -316,6 +330,10 @@ class DIContainer {
           this.pendingRequirements.push(...def.requires);
         }
 
+        if (def.contracts) {
+          this.pendingContracts.push(...def.contracts);
+        }
+
         this.modules.push(def.module);
       }
 
@@ -359,6 +377,14 @@ class DIContainer {
         }
         this.pendingRequirements = [];
       }
+
+      const governanceRegistry = this.coreInstances.get('CapabilityGovernanceRegistry') as import('@core/capability-governance/governance-registry').CapabilityGovernanceRegistry | undefined;
+      if (governanceRegistry) {
+        for (const contract of this.pendingContracts) {
+          governanceRegistry.registerContract(contract);
+        }
+      }
+      this.pendingContracts = [];
 
       this.containerState = 'READY';
     } catch (err) {

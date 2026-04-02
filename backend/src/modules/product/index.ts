@@ -7,6 +7,7 @@ import type { EventConsumer } from '@core/consumer/consumer';
 import type { CacheService } from '@core/cache/cache.service';
 import type { Express } from 'express';
 import {
+  pricingContract,
   pricingCapability,
   basePriceHandler,
   roundingHandler,
@@ -44,6 +45,7 @@ const productModuleFactory: ModuleFactory = {
       ],
       exports: ['IProductService'],
       capabilities: [basePriceHandler, roundingHandler, finalPriceHandler],
+      contracts: [pricingContract],
       schemas: {
         products,
       },

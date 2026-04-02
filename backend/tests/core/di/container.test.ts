@@ -409,3 +409,28 @@ describe('DIContainer', () => {
     });
   });
 });
+
+describe('DIContainer ModuleDefinition contracts', () => {
+  it('should accept contracts field in ModuleDefinition', () => {
+    const containerContent = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../../src/core/di/container.ts'),
+      'utf-8',
+    );
+
+    const hasContractsField = /contracts\?\s*:/.test(containerContent);
+    expect(hasContractsField).toBe(true);
+  });
+
+  it('should collect contracts during build()', () => {
+    const containerContent = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../../src/core/di/container.ts'),
+      'utf-8',
+    );
+
+    const hasPendingContracts = /pendingContracts/.test(containerContent);
+    expect(hasPendingContracts).toBe(true);
+
+    const registersContractsInBuild = /def\.contracts/.test(containerContent);
+    expect(registersContractsInBuild).toBe(true);
+  });
+});
