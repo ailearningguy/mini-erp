@@ -1,5 +1,9 @@
 type Factory<T = unknown> = () => T;
 
+interface ActivePlugin {
+  name: string;
+}
+
 interface ServiceRegistration<T = unknown> {
   factory: Factory<T>;
   singleton: boolean;
@@ -121,6 +125,13 @@ class DIContainer {
   getDependencies(token: string): string[] {
     return this.services.get(token)?.deps ?? [];
   }
+
+  async rebuild(_plugins: ActivePlugin[]): Promise<void> {
+  }
+}
+
+interface ActivePlugin {
+  name: string;
 }
 
 export { DIContainer };
