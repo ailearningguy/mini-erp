@@ -18,8 +18,9 @@ import { ExternalServiceProxy } from '@core/external-integration/proxy';
 import { CacheService } from '@core/cache/cache.service';
 import { ArchitectureValidator } from '@core/architecture-validator/validator';
 import { ModuleRegistry, FsModuleRegistry } from '@core/module-registry/registry';
+import { FsPluginRegistry } from '@core/plugin-registry';
+import { SchemaCollector } from '@core/schema/schema-collector';
 import { SagaOrchestrator } from '@core/saga/saga-orchestrator';
-import { AnalyticsPlugin } from '@plugins/analytics/analytics.plugin';
 import { requestIdMiddleware, snakeCaseMiddleware, snakeCaseResponseMiddleware, globalErrorHandler } from '@core/api/response';
 import { authMiddleware } from '@core/auth/auth.middleware';
 import { TokenRevocationService } from '@core/auth/token-revocation.service';
@@ -209,11 +210,53 @@ async function bootstrap(): Promise<void> {
   validateCapabilities(capabilityRegistry);
   checkDeprecations(capabilityRegistry.getAllContracts());
 
-  // --- Register plugins ---
+  // --- Schema Collector ---
+  const schemaCollector = new SchemaCollector();
+
+  // Collect module schemas from container build
+  // (modules export schemas via ModuleDefinition.schemas)
+
+  // --- Auto-discover and register plugins ---
+  const fsPluginRegistry = new FsPluginRegistry(
+    path.join(__dirname, 'plugins'),
+    logger,
+  );
+  container.registerCore('FsPluginRegistry', {
+    useFactory: () => fsPluginRegistry,
+  });
+
+  await fsPluginRegistry.refresh();
+
   const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
-  const analyticsPlugin = new AnalyticsPlugin(db);
-  await pluginLoader.register(analyticsPlugin);
-  await pluginLoader.activate('analytics');
+
+  for (const pluginMeta of fsPluginRegistry.getActive()) {
+    const factory = await pluginMeta.entry();
+    const pluginDef = await factory.default.create(container);
+
+    await pluginLoader.register(pluginDef.plugin);
+    await pluginLoader.activate(pluginMeta.name);
+
+    if (pluginDef.routes) {
+      pluginDef.routes(app);
+    }
+
+    if (pluginDef.schemas) {
+      schemaCollector.collect(pluginDef.schemas, `plugin:${pluginMeta.name}`);
+    }
+
+    if (pluginDef.hooks) {
+      for (const hook of pluginDef.hooks) {
+        hookRegistry.register(hook);
+      }
+    }
+
+    if (pluginDef.eventHandlers) {
+      const eventConsumer = container.resolve<EventConsumer>('EventConsumer');
+      for (const { eventType, handler } of pluginDef.eventHandlers) {
+        eventConsumer.registerHandler(eventType, handler);
+      }
+    }
+  }
 
   // --- Validate architecture with real plugins after registration ---
   const activePlugins = pluginLoader.getActivePlugins().map(name => {
@@ -255,20 +298,7 @@ async function bootstrap(): Promise<void> {
     logger.warn({ errors: validationResult.errors }, 'Architecture validation warnings');
   }
 
-  const analyticsModule = analyticsPlugin.getModule();
-  if (analyticsModule) {
-    analyticsModule.registerRoutes(app);
-  }
-
   const eventConsumer = container.resolve<EventConsumer>('EventConsumer');
-  analyticsPlugin.setEventConsumer(eventConsumer);
-
-  // Register event handlers from FsModuleRegistry (modules now use container.get() directly)
-  const fsReg = container.get<FsModuleRegistry>('FsModuleRegistry');
-  const pendingHooks = container.getPendingHooks();
-  for (const hook of pendingHooks) {
-    eventConsumer.registerHandler(hook.point, hook.handler);
-  }
 
   // --- Wire Saga Orchestrator ---
   const sagaOrchestrator = new SagaOrchestrator(db);
