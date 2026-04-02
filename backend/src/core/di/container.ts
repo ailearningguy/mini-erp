@@ -41,6 +41,7 @@ interface ModuleDefinition {
   hooks?: HookRegistration[];
   capabilities?: CapabilityHandlerStub[];
   requires?: CapabilityRequirementStub[];
+  schemas?: Record<string, unknown>;
 }
 
 interface ProviderRegistration<T = unknown> {
