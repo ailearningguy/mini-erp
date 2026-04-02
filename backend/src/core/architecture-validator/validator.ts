@@ -28,6 +28,7 @@ class ArchitectureValidator {
       dependencyGraph?: DependencyGraph;
       plugins?: PluginRegistration[];
       serviceBindings?: ServiceBinding[];
+      moduleTokens?: string[];
     },
   ): Promise<ValidationResult> {
     try {
@@ -35,8 +36,14 @@ class ArchitectureValidator {
       this.validateServiceBindings(diTokens);
 
       if (options?.dependencyGraph) {
-        this.validateNoCoreToModule(options.dependencyGraph);
-        this.validateNoCoreToPlugin(options.dependencyGraph);
+        this.validateNoCoreToModule(
+          options.dependencyGraph,
+          options.moduleTokens || [],
+        );
+        this.validateNoCoreToPlugin(
+          options.dependencyGraph,
+          options.plugins?.map(p => p.name) || [],
+        );
       }
 
       if (options?.plugins) {
@@ -45,6 +52,18 @@ class ArchitectureValidator {
 
       if (options?.serviceBindings) {
         this.validateServiceInterfaces(options.serviceBindings);
+      }
+
+      if (options?.moduleTokens && options?.dependencyGraph) {
+        const crossModuleErrors = this.validateCrossModuleImportFromGraph(
+          options.dependencyGraph,
+          options.moduleTokens,
+        );
+        if (crossModuleErrors.length > 0) {
+          throw new Error(
+            `Cross-module import violations:\n  ${crossModuleErrors.join('\n  ')}`,
+          );
+        }
       }
 
       return { valid: true };
@@ -214,6 +233,26 @@ class ArchitectureValidator {
         + 'Modules must communicate via service interfaces and events.',
       );
     }
+  }
+
+  private validateCrossModuleImportFromGraph(
+    graph: DependencyGraph,
+    moduleTokens: string[],
+  ): string[] {
+    const errors: string[] = [];
+    const moduleTokenSet = new Set(moduleTokens);
+    
+    for (const edge of graph.edges) {
+      if (moduleTokenSet.has(edge.from) && moduleTokenSet.has(edge.to)) {
+        if (edge.from !== edge.to) {
+          errors.push(
+            `Module token "${edge.from}" imports from "${edge.to}"`,
+          );
+        }
+      }
+    }
+
+    return errors;
   }
 }
 

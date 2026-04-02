@@ -10,4 +10,17 @@ describe('ArchitectureValidator', () => {
     const usesCorePrefix = validatorContent.includes("n.startsWith('core/')");
     expect(usesCorePrefix).toBe(false);
   });
+
+  it('should call validateCrossModuleImport during validateOnStartup', () => {
+    const validatorContent = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../src/core/architecture-validator/validator.ts'),
+      'utf-8',
+    );
+
+    const onStartupMatch = validatorContent.match(/async validateOnStartup\([^)]*\)[^}]*\{([\s\S]*?)\n  \}/);
+    expect(onStartupMatch).not.toBeNull();
+    
+    const onStartupBody = onStartupMatch ? onStartupMatch[1] : '';
+    expect(onStartupBody).toContain('validateCrossModuleImport');
+  });
 });
