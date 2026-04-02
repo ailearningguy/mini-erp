@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { sagaState } from './saga.schema';
+import type { Db } from '@shared/types/db';
 
 enum SagaStatus {
   PENDING = 'PENDING',
@@ -50,10 +51,8 @@ interface SagaStateRecord {
   ttlAt: Date | null;
 }
 
-type AnyDb = Record<string, unknown>;
-
 class SagaOrchestrator {
-  constructor(private readonly db: AnyDb) {}
+  constructor(private readonly db: Db) {}
 
   async startSaga<TContext>(
     definition: SagaDefinition<TContext>,
@@ -154,7 +153,7 @@ class SagaOrchestrator {
     }
 
     await this.updateSagaState(sagaId, { retryCount: state.retryCount + 1 });
-    await this.executeSaga(sagaId, definition, state.context as any);
+    await this.executeSaga(sagaId, definition, state.context as Record<string, unknown>);
   }
 
   private async executeWithTimeout<T>(
@@ -172,12 +171,12 @@ class SagaOrchestrator {
 
   // --- Persistence helpers (use Drizzle) ---
 
-  private async withTransaction<T>(fn: (tx: AnyDb) => Promise<T>): Promise<T> {
-    return (this.db as any).transaction(fn);
+  private async withTransaction<T>(fn: (tx: Db) => Promise<T>): Promise<T> {
+    return this.db.transaction(fn);
   }
 
   private async persistState(state: Omit<SagaStateRecord, 'id' | 'startedAt' | 'updatedAt' | 'completedAt' | 'ttlAt'>): Promise<void> {
-    await (this.db as any).insert(sagaState).values({
+    await this.db.insert(sagaState).values({
       sagaId: state.sagaId,
       sagaName: state.sagaName,
       aggregateId: state.aggregateId,
@@ -203,8 +202,7 @@ class SagaOrchestrator {
       retryCount: number;
     }>,
   ): Promise<void> {
-    await this.withTransaction(async (tx_) => {
-      const tx = tx_ as any;
+    await this.withTransaction(async (tx) => {
       const setValues: Record<string, unknown> = { updatedAt: new Date() };
 
       if (updates.status !== undefined) setValues.status = updates.status;
@@ -223,7 +221,7 @@ class SagaOrchestrator {
   }
 
   private async getState(sagaId: string): Promise<SagaStateRecord | null> {
-    const result = await (this.db as any)
+    const result = await this.db
       .select()
       .from(sagaState)
       .where(eq(sagaState.sagaId, sagaId))
@@ -239,9 +237,9 @@ class SagaOrchestrator {
       aggregateId: row.aggregateId,
       status: row.status,
       currentStep: row.currentStep,
-      completedSteps: JSON.parse(row.completedSteps || '[]'),
-      compensatedSteps: JSON.parse(row.compensatedSteps || '[]'),
-      context: JSON.parse(row.context || '{}'),
+      completedSteps: (row.completedSteps ?? []) as string[],
+      compensatedSteps: (row.compensatedSteps ?? []) as string[],
+      context: (row.context ?? {}) as Record<string, unknown>,
       retryCount: row.retryCount,
       lastError: row.lastError,
       startedAt: row.startedAt,

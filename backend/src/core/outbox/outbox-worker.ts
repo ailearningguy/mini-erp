@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { OutboxRepository } from './outbox.repository';
 import { EVENT_CONSTANTS } from '@shared/constants';
 
-interface AmqpChannel {
+export interface AmqpChannel {
   publish(exchange: string, routingKey: string, content: Buffer, options?: Record<string, unknown>): boolean;
   assertExchange(exchange: string, type: string, options?: Record<string, unknown>): Promise<void>;
 }

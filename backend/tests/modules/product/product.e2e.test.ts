@@ -15,10 +15,10 @@ import { EventRateLimiter } from '@core/consumer/rate-limiter';
 import { CacheService } from '@core/cache/cache.service';
 import Redis from 'ioredis';
 import { eq } from 'drizzle-orm';
-import type { AnyDb } from '@shared/types/db';
+import type { Db } from '@shared/types/db';
 
 describe('Phase 2 E2E: Product → Outbox → Consumer → Cache', () => {
-  let db: AnyDb;
+  let db: Db;
   let eventBus: EventBus;
   let eventRegistry: EventSchemaRegistry;
   let outboxRepo: OutboxRepository;
@@ -42,7 +42,7 @@ describe('Phase 2 E2E: Product → Outbox → Consumer → Cache', () => {
       max: 5,
     });
 
-    db = drizzle(pool) as unknown as AnyDb;
+    db = drizzle(pool);
     redis = new Redis(config.redis.url);
 
     eventRegistry = new EventSchemaRegistry();

@@ -6,16 +6,16 @@ import type { IProductService, Product } from './interfaces/product.service.inte
 import { EventBus } from '@core/event-bus/event-bus';
 import { AppError, ErrorCode } from '@shared/errors';
 
-import type { AnyDb } from '@shared/types/db';
+import type { Db } from '@shared/types/db';
 
 class ProductService implements IProductService {
   constructor(
-    private readonly db: AnyDb,
+    private readonly db: Db,
     private readonly eventBus: EventBus,
   ) {}
 
   async getById(id: string): Promise<Product | null> {
-    const result = await (this.db as any)
+    const result = await this.db
       .select()
       .from(products)
       .where(eq(products.id, id))
@@ -24,7 +24,7 @@ class ProductService implements IProductService {
   }
 
   async getBySku(sku: string): Promise<Product | null> {
-    const result = await (this.db as any)
+    const result = await this.db
       .select()
       .from(products)
       .where(eq(products.sku, sku))
@@ -39,7 +39,7 @@ class ProductService implements IProductService {
       conditions.push(gt(products.id, cursor));
     }
 
-    const result = await (this.db as any)
+    const result = await this.db
       .select()
       .from(products)
       .where(and(...conditions))
@@ -65,8 +65,7 @@ class ProductService implements IProductService {
 
     const id = randomUUID();
 
-    const result = await (this.db as any).transaction(async (tx_: AnyDb) => {
-      const tx = tx_ as any;
+    const result = await this.db.transaction(async (tx: Db) => {
       await tx.insert(products).values({
         id,
         productName: dto.productName,
@@ -111,9 +110,7 @@ class ProductService implements IProductService {
     if (dto.stock !== undefined) changes.stock = dto.stock;
     if (dto.isActive !== undefined) changes.isActive = dto.isActive;
 
-    const result = await (this.db as any).transaction(async (tx_: AnyDb) => {
-      const tx = tx_ as any;
-
+    const result = await this.db.transaction(async (tx: Db) => {
       const existingRows = await tx
         .select()
         .from(products)
@@ -171,9 +168,7 @@ class ProductService implements IProductService {
   }
 
   async delete(id: string): Promise<void> {
-    await (this.db as any).transaction(async (tx_: AnyDb) => {
-      const tx = tx_ as any;
-
+    await this.db.transaction(async (tx: Db) => {
       const existingRows = await tx
         .select()
         .from(products)

@@ -2,12 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { EventEnvelope } from '@shared/types/event';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
 import { OutboxRepository } from '@core/outbox/outbox.repository';
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-
-interface Transaction {
-  // Drizzle transaction type — simplified for skeleton
-  [key: string]: unknown;
-}
+import type { Db } from '@shared/types/db';
 
 class EventBus {
   constructor(
@@ -17,7 +12,7 @@ class EventBus {
 
   async emit<T extends Record<string, unknown>>(
     event: Omit<EventEnvelope<T>, 'id' | 'timestamp'>,
-    tx: PostgresJsDatabase<Record<string, unknown>> | Transaction,
+    tx: Db,
   ): Promise<EventEnvelope<T>> {
     if (!tx) {
       throw new Error(
@@ -34,7 +29,7 @@ class EventBus {
 
     this.schemaRegistry.validate(fullEvent.type, fullEvent);
 
-    await this.outboxRepo.insert(fullEvent, tx as any);
+    await this.outboxRepo.insert(fullEvent, tx);
 
     return fullEvent;
   }

@@ -5,10 +5,10 @@ import { ProductCreatedEventSchema, ProductUpdatedEventSchema, ProductDeactivate
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
 import { EventBus } from '@core/event-bus/event-bus';
 import type { Express } from 'express';
-import type { AnyDb } from '@shared/types/db';
+import type { Db } from '@shared/types/db';
 
 interface ProductModuleConfig {
-  db: AnyDb;
+  db: Db;
   eventBus: EventBus;
   schemaRegistry: EventSchemaRegistry;
 }

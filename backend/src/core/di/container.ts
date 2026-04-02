@@ -7,14 +7,37 @@ interface ServiceRegistration<T = unknown> {
   deps: string[];
 }
 
+const RESTRICTED_TOKEN_PATTERNS = [
+  /repository/i,
+  /\.schema$/i,
+  /schema\./i,
+];
+
 class DIContainer {
   private services = new Map<string, ServiceRegistration>();
   private resolving = new Set<string>();
+  private currentActor: string = 'core';
+
+  setActor(actor: string): void {
+    this.currentActor = actor;
+  }
 
   register<T>(token: string, factory: Factory<T>, deps: string[] = [], singleton = true): void {
     if (this.services.has(token)) {
       throw new Error(`Service already registered: ${token}`);
     }
+
+    if (this.currentActor.startsWith('plugin:')) {
+      for (const pattern of RESTRICTED_TOKEN_PATTERNS) {
+        if (pattern.test(token)) {
+          throw new Error(
+            `Plugin "${this.currentActor}" cannot register "${token}". `
+            + 'Plugins must use service interfaces, not repositories or schemas.',
+          );
+        }
+      }
+    }
+
     this.services.set(token, { factory, singleton, deps });
   }
 

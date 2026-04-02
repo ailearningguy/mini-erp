@@ -1,10 +1,23 @@
-import { CircuitBreaker, defaultCircuitBreakerConfigs } from './circuit-breaker';
-import { PluginGuard, type IPlugin } from '@core/plugin-system/plugin-loader';
+import { CircuitBreaker, type CircuitBreakerConfig } from './circuit-breaker';
+import type { IPermissionValidator, IPlugin } from '@core/plugin-system/plugin-loader';
 import { AppError, ErrorCode } from '@shared/errors';
+
+const GENERIC_DEFAULT_CONFIG: CircuitBreakerConfig = {
+  target: '',
+  failureThreshold: 5,
+  successThreshold: 3,
+  resetTimeoutMs: 30_000,
+  monitorIntervalMs: 60_000,
+  halfOpenMaxProbes: 3,
+};
 
 class ExternalServiceProxy {
   private breakers = new Map<string, CircuitBreaker>();
-  private pluginGuard = new PluginGuard();
+
+  constructor(
+    private readonly pluginGuard: IPermissionValidator,
+    private readonly customConfigs: Record<string, CircuitBreakerConfig> = {},
+  ) {}
 
   call<T>(
     plugin: IPlugin,
@@ -36,13 +49,9 @@ class ExternalServiceProxy {
 
   private getOrCreateBreaker(target: string): CircuitBreaker {
     if (!this.breakers.has(target)) {
-      const config = defaultCircuitBreakerConfigs[target] ?? {
+      const config = this.customConfigs[target] ?? {
+        ...GENERIC_DEFAULT_CONFIG,
         target,
-        failureThreshold: 5,
-        successThreshold: 3,
-        resetTimeoutMs: 30_000,
-        monitorIntervalMs: 60_000,
-        halfOpenMaxProbes: 3,
       };
       this.breakers.set(target, new CircuitBreaker(config));
     }

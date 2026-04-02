@@ -94,24 +94,5 @@ class CircuitBreaker {
   }
 }
 
-const defaultCircuitBreakerConfigs: Record<string, CircuitBreakerConfig> = {
-  'payment-gateway': {
-    target: 'payment-gateway',
-    failureThreshold: 3,
-    successThreshold: 2,
-    resetTimeoutMs: 60_000,
-    monitorIntervalMs: 120_000,
-    halfOpenMaxProbes: 2,
-  },
-  'email-service': {
-    target: 'email-service',
-    failureThreshold: 10,
-    successThreshold: 3,
-    resetTimeoutMs: 30_000,
-    monitorIntervalMs: 60_000,
-    halfOpenMaxProbes: 3,
-  },
-};
-
-export { CircuitBreaker, CircuitState, defaultCircuitBreakerConfigs };
+export { CircuitBreaker, CircuitState };
 export type { CircuitBreakerConfig };

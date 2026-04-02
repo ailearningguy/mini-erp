@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { EventRateLimiter, TokenBucket } from '@core/consumer/rate-limiter';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 describe('TokenBucket', () => {
   it('should allow requests within limit', () => {
@@ -49,5 +51,18 @@ describe('EventRateLimiter', () => {
     expect(limiter.checkLimit('product.created.v1')).toBe(true);
     expect(limiter.checkLimit('product.created.v1')).toBe(false);
     expect(limiter.checkLimit('order.created.v1')).toBe(true);
+  });
+});
+
+describe('Core Independence — rate-limiter', () => {
+  it('should not contain hardcoded domain event types', () => {
+    const content = readFileSync(
+      resolve(__dirname, '../../../src/core/consumer/rate-limiter.ts'),
+      'utf-8',
+    );
+    expect(content).not.toContain('product.created');
+    expect(content).not.toContain('order.created');
+    expect(content).not.toContain('inventory.reserved');
+    expect(content).not.toContain('DEFAULT_EVENT_RATE_LIMITS');
   });
 });

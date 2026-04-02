@@ -8,11 +8,11 @@ import { DIContainer } from '@core/di/container';
 import { EventBus } from '@core/event-bus/event-bus';
 import { OutboxRepository } from '@core/outbox/outbox.repository';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
-import { EventRateLimiter, DEFAULT_EVENT_RATE_LIMITS } from '@core/consumer/rate-limiter';
+import { EventRateLimiter, type RateLimitConfig } from '@core/consumer/rate-limiter';
 import { ProcessedEventStore } from '@core/consumer/processed-event.schema';
 import { EventConsumer } from '@core/consumer/consumer';
 import { AmqpConsumer } from '@core/consumer/amqp-consumer';
-import { PluginLoader } from '@core/plugin-system/plugin-loader';
+import { PluginLoader, PluginGuard } from '@core/plugin-system/plugin-loader';
 import { ExternalServiceProxy } from '@core/external-integration/proxy';
 import { CacheService } from '@core/cache/cache.service';
 import { ArchitectureValidator } from '@core/architecture-validator/validator';
@@ -25,7 +25,7 @@ import { ApiIdempotencyStore } from '@core/idempotency/api-idempotency';
 import { createRateLimiter } from '@core/api/rate-limiter';
 import { API_CONSTANTS, EVENT_CONSTANTS } from '@shared/constants';
 import { logger } from '@core/logging/logger';
-import type { AnyDb } from '@shared/types/db';
+import type { Db } from '@shared/types/db';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -66,7 +66,7 @@ async function bootstrap(): Promise<void> {
     return redis;
   });
   container.register('OutboxRepository', () => {
-    const db = container.resolve<AnyDb>('Database');
+    const db = container.resolve<Db>('Database');
     return new OutboxRepository(db);
   }, ['Database']);
   container.register('EventBus', () => {
@@ -74,9 +74,19 @@ async function bootstrap(): Promise<void> {
     const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
     return new EventBus(outboxRepo, schemaRegistry);
   }, ['OutboxRepository', 'EventSchemaRegistry']);
-  container.register('EventRateLimiter', () => new EventRateLimiter(DEFAULT_EVENT_RATE_LIMITS));
+  container.register('EventRateLimiter', () => {
+    const defaultRateLimits: RateLimitConfig[] = [
+      { eventType: 'product.created.v1', maxEventsPerSecond: 500 },
+      { eventType: 'product.updated.v1', maxEventsPerSecond: 500 },
+      { eventType: 'product.deactivated.v1', maxEventsPerSecond: 200 },
+      { eventType: 'order.created.v1', maxEventsPerSecond: 100 },
+      { eventType: 'order.completed.v1', maxEventsPerSecond: 100 },
+      { eventType: 'inventory.reserved.v1', maxEventsPerSecond: 200 },
+    ];
+    return new EventRateLimiter(defaultRateLimits);
+  });
   container.register('ProcessedEventStore', () => {
-    const db = container.resolve<AnyDb>('Database');
+    const db = container.resolve<Db>('Database');
     return new ProcessedEventStore(db);
   }, ['Database']);
   container.register('EventConsumer', () => {
@@ -87,7 +97,7 @@ async function bootstrap(): Promise<void> {
       processedStore,
       schemaRegistry,
       rateLimiter,
-      (fn) => (container.resolve<AnyDb>('Database') as any).transaction(fn),
+      (fn) => container.resolve<Db>('Database').transaction(fn),
     );
   }, ['ProcessedEventStore', 'EventSchemaRegistry', 'EventRateLimiter', 'Database']);
   container.register('CacheService', () => {
@@ -95,7 +105,7 @@ async function bootstrap(): Promise<void> {
     return new CacheService(redis as ConstructorParameters<typeof CacheService>[0]);
   }, ['Redis']);
   container.register('PluginLoader', () => new PluginLoader());
-  container.register('ExternalServiceProxy', () => new ExternalServiceProxy());
+  container.register('ExternalServiceProxy', () => new ExternalServiceProxy(new PluginGuard()));
   container.register('ArchitectureValidator', () => new ArchitectureValidator());
 
   // --- Validate DI graph ---
@@ -120,7 +130,7 @@ async function bootstrap(): Promise<void> {
   app.use('/api', authMiddleware(config));
 
   // --- Register modules ---
-  const db = container.resolve<AnyDb>('Database');
+  const db = container.resolve<Db>('Database');
   const eventBus = container.resolve<EventBus>('EventBus');
   const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
 

@@ -10,10 +10,10 @@ import { ProductCreatedEventSchema, ProductUpdatedEventSchema, ProductDeactivate
 import { products } from '@modules/product/product.schema';
 import { outbox } from '@core/outbox/outbox.schema';
 import { eq } from 'drizzle-orm';
-import type { AnyDb } from '@shared/types/db';
+import type { Db } from '@shared/types/db';
 
 describe('Phase 1 Integration: Product + Outbox', () => {
-  let db: AnyDb;
+  let db: Db;
   let eventBus: EventBus;
   let eventRegistry: EventSchemaRegistry;
   let outboxRepo: OutboxRepository;
@@ -31,7 +31,7 @@ describe('Phase 1 Integration: Product + Outbox', () => {
       max: 5,
     });
 
-    db = drizzle(pool) as unknown as AnyDb;
+    db = drizzle(pool);
 
     eventRegistry = new EventSchemaRegistry();
     eventRegistry.register('product.created.v1', ProductCreatedEventSchema);

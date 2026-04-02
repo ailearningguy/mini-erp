@@ -2,16 +2,16 @@ import { eq, and, lte, asc, sql } from 'drizzle-orm';
 import { outbox, outboxDlq } from './outbox.schema';
 import type { EventEnvelope } from '@shared/types/event';
 import { EVENT_CONSTANTS } from '@shared/constants';
-import type { AnyDb } from '@shared/types/db';
+import type { Db } from '@shared/types/db';
 
 class OutboxRepository {
-  constructor(private readonly db: AnyDb) {}
+  constructor(private readonly db: Db) {}
 
-  async insert(event: EventEnvelope, tx: AnyDb): Promise<void> {
+  async insert(event: EventEnvelope, tx: Db): Promise<void> {
     if (!tx) {
       throw new Error('OutboxRepository.insert() requires a transaction. Events MUST be written within the same transaction as domain data.');
     }
-    await (tx as any).insert(outbox).values({
+    await tx.insert(outbox).values({
       eventId: event.id,
       eventType: event.type,
       source: event.source,
@@ -24,7 +24,7 @@ class OutboxRepository {
   }
 
   async fetchPending(batchSize: number = EVENT_CONSTANTS.OUTBOX_BATCH_SIZE): Promise<typeof outbox.$inferSelect[]> {
-    return (this.db as any)
+    return this.db
       .select()
       .from(outbox)
       .where(
@@ -39,7 +39,7 @@ class OutboxRepository {
   }
 
   async markProcessing(ids: string[], workerId: string): Promise<void> {
-    await (this.db as any)
+    await this.db
       .update(outbox)
       .set({
         status: 'processing',
@@ -50,7 +50,7 @@ class OutboxRepository {
   }
 
   async markProcessed(id: string): Promise<void> {
-    await (this.db as any)
+    await this.db
       .update(outbox)
       .set({
         status: 'processed',
@@ -60,7 +60,7 @@ class OutboxRepository {
   }
 
   async markFailed(id: string, error: string, maxAttempts: number): Promise<void> {
-    const entry = await (this.db as any)
+    const entry = await this.db
       .select()
       .from(outbox)
       .where(eq(outbox.id, id))
@@ -72,13 +72,13 @@ class OutboxRepository {
 
     if (newAttempts >= maxAttempts) {
       await this.moveToDlq(entry[0], error);
-      await (this.db as any).delete(outbox).where(eq(outbox.id, id));
+      await this.db.delete(outbox).where(eq(outbox.id, id));
     } else {
       const delay = Math.min(
         EVENT_CONSTANTS.OUTBOX_BASE_DELAY_MS * Math.pow(EVENT_CONSTANTS.OUTBOX_BACKOFF_MULTIPLIER, newAttempts - 1),
         EVENT_CONSTANTS.OUTBOX_MAX_DELAY_MS,
       );
-      await (this.db as any)
+      await this.db
         .update(outbox)
         .set({
           status: 'pending',
@@ -92,7 +92,7 @@ class OutboxRepository {
   }
 
   async resetStaleEntries(staleBefore: Date): Promise<number> {
-    const result = await (this.db as any)
+    const result = await this.db
       .update(outbox)
       .set({
         status: 'pending',
@@ -109,7 +109,7 @@ class OutboxRepository {
   }
 
   async countPending(): Promise<number> {
-    const result = await (this.db as any)
+    const result = await this.db
       .select({ count: sql<number>`count(*)` })
       .from(outbox)
       .where(eq(outbox.status, 'pending'));
@@ -117,7 +117,7 @@ class OutboxRepository {
   }
 
   private async moveToDlq(entry: typeof outbox.$inferSelect, failureReason: string): Promise<void> {
-    await (this.db as any).insert(outboxDlq).values({
+    await this.db.insert(outboxDlq).values({
       originalEventId: entry.eventId,
       eventType: entry.eventType,
       payload: entry.payload,

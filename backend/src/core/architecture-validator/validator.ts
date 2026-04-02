@@ -1,3 +1,20 @@
+interface DependencyGraph {
+  nodes: string[];
+  edges: { from: string; to: string }[];
+}
+
+interface PluginRegistration {
+  name: string;
+  permissions: { resource: string; actions: string[]; scope?: string }[];
+  activatedAt: Date | null;
+}
+
+interface ServiceBinding {
+  token: string;
+  implementation: string;
+  isInterface: boolean;
+}
+
 class ArchitectureValidator {
   async validateOnStartup(
     diTokens: string[],
@@ -67,6 +84,58 @@ class ArchitectureValidator {
     }
   }
 
+  validateNoCoreToModule(graph: DependencyGraph): void {
+    const coreModules = graph.nodes.filter(n => n.startsWith('core/'));
+    const moduleModules = graph.nodes.filter(n => n.startsWith('modules/'));
+    const coreToModuleEdges = graph.edges.filter(
+      e => coreModules.includes(e.from) && moduleModules.includes(e.to)
+    );
+
+    if (coreToModuleEdges.length > 0) {
+      throw new Error(
+        `Core must not depend on modules. Found ${coreToModuleEdges.length} violations.`
+      );
+    }
+  }
+
+  validateNoCoreToPlugin(graph: DependencyGraph): void {
+    const coreModules = graph.nodes.filter(n => n.startsWith('core/'));
+    const pluginModules = graph.nodes.filter(n => n.startsWith('plugins/'));
+    const coreToPluginEdges = graph.edges.filter(
+      e => coreModules.includes(e.from) && pluginModules.includes(e.to)
+    );
+
+    if (coreToPluginEdges.length > 0) {
+      throw new Error(
+        `Core must not depend on plugins. Found ${coreToPluginEdges.length} violations.`
+      );
+    }
+  }
+
+  validatePluginGuards(plugins: PluginRegistration[]): void {
+    for (const plugin of plugins) {
+      if (!plugin.permissions) continue;
+
+      for (const perm of plugin.permissions) {
+        if (!perm.resource || !perm.actions || perm.actions.length === 0) {
+          throw new Error(
+            `Invalid permission in plugin "${plugin.name}": resource and actions are required`
+          );
+        }
+      }
+    }
+  }
+
+  validateServiceInterfaces(bindings: ServiceBinding[]): void {
+    for (const binding of bindings) {
+      if (binding.isInterface && !binding.token.startsWith('I')) {
+        throw new Error(
+          `Interface token "${binding.token}" must start with 'I' prefix`
+        );
+      }
+    }
+  }
+
   validatePluginImports(
     pluginSource: string,
     importPath: string,
@@ -105,3 +174,4 @@ class ArchitectureValidator {
 }
 
 export { ArchitectureValidator };
+export type { DependencyGraph, PluginRegistration, ServiceBinding };

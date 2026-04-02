@@ -3,9 +3,10 @@ import type { EventEnvelope } from '@shared/types/event';
 import { ProcessedEventStore } from './processed-event.schema';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
 import { EventRateLimiter } from '@core/consumer/rate-limiter';
+import type { Db } from '@shared/types/db';
 
-type EventHandler = (event: EventEnvelope, tx: Record<string, unknown>) => Promise<void>;
-type DbTransaction = <T>(fn: (tx: Record<string, unknown>) => Promise<T>) => Promise<T>;
+type EventHandler = (event: EventEnvelope, tx: Db) => Promise<void>;
+type DbTransaction = <T>(fn: (tx: Db) => Promise<T>) => Promise<T>;
 
 class EventConsumer extends EventEmitter {
   private handlers = new Map<string, EventHandler>();

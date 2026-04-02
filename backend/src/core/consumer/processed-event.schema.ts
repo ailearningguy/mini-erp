@@ -1,5 +1,6 @@
 import { pgTable, uuid, timestamp, varchar } from 'drizzle-orm/pg-core';
 import { eq } from 'drizzle-orm';
+import type { Db } from '@shared/types/db';
 
 export const processedEvents = pgTable('processed_events', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -8,14 +9,12 @@ export const processedEvents = pgTable('processed_events', {
   processedAt: timestamp('processed_at').defaultNow().notNull(),
 });
 
-type AnyDb = Record<string, unknown>;
-
 class ProcessedEventStore {
-  constructor(private readonly db: AnyDb) {}
+  constructor(private readonly db: Db) {}
 
-  async has(eventId: string, tx?: AnyDb): Promise<boolean> {
-    const db = (tx ?? this.db) as any;
-    const result = await db
+  async has(eventId: string, tx?: Db): Promise<boolean> {
+    const database = tx ?? this.db;
+    const result = await database
       .select({ id: processedEvents.id })
       .from(processedEvents)
       .where(eq(processedEvents.eventId, eventId))
@@ -23,8 +22,8 @@ class ProcessedEventStore {
     return result.length > 0;
   }
 
-  async mark(eventId: string, eventType: string, tx: AnyDb): Promise<void> {
-    await (tx as any).insert(processedEvents).values({
+  async mark(eventId: string, eventType: string, tx: Db): Promise<void> {
+    await tx.insert(processedEvents).values({
       eventId,
       eventType,
     });

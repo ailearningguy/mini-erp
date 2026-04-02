@@ -1,13 +1,13 @@
 import type { Express } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsController } from './analytics.controller';
-import type { AnyDb } from '@shared/types/db';
+import type { Db } from '@shared/types/db';
 
 export class AnalyticsModule {
   private service: AnalyticsService;
   private controller: AnalyticsController;
 
-  constructor(db: AnyDb) {
+  constructor(db: Db) {
     this.service = new AnalyticsService(db);
     this.controller = new AnalyticsController(this.service);
   }

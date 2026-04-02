@@ -2,7 +2,8 @@ import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { loadConfig } from '@core/config/config';
 import { OutboxRepository } from './outbox.repository';
-import { OutboxWorker } from './outbox-worker';
+import { OutboxWorker, type AmqpChannel } from './outbox-worker';
+import type { Db } from '@shared/types/db';
 
 export async function startWorker(): Promise<OutboxWorker> {
   const config = loadConfig();
@@ -18,14 +19,14 @@ export async function startWorker(): Promise<OutboxWorker> {
     connectionTimeoutMillis: 2000,
   });
 
-  const db = drizzle(pool);
-  const outboxRepo = new OutboxRepository(db as any);
+  const db: Db = drizzle(pool);
+  const outboxRepo = new OutboxRepository(db);
 
   const amqp = await import('amqplib');
   const connection = await amqp.connect(config.rabbitmq.url);
   const channel = await connection.createChannel();
 
-  const worker = new OutboxWorker(outboxRepo, channel as any);
+  const worker = new OutboxWorker(outboxRepo, channel as unknown as AmqpChannel);
 
   process.on('SIGTERM', async () => {
     console.log('[OutboxWorker] SIGTERM received, stopping...');

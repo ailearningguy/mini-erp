@@ -4,6 +4,10 @@ interface PluginPermission {
   scope?: string;
 }
 
+interface IPermissionValidator {
+  validate(permissions: PluginPermission[], requestedAccess: { resource: string; action: string }): boolean;
+}
+
 interface PluginMetadata {
   name: string;
   version: string;
@@ -159,4 +163,4 @@ class PluginGuard {
 }
 
 export { PluginLoader, PluginGuard, PluginStatus };
-export type { IPlugin, PluginMetadata, PluginPermission };
+export type { IPlugin, PluginMetadata, PluginPermission, IPermissionValidator };

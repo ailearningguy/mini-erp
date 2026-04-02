@@ -3,10 +3,9 @@ import type { EventEnvelope } from '@shared/types/event';
 import { AnalyticsModule } from './analytics.module';
 import type { AnalyticsService } from './analytics.service';
 import { createChildLogger } from '@core/logging/logger';
+import type { Db } from '@shared/types/db';
 
 const log = createChildLogger({ plugin: 'analytics' });
-
-import type { AnyDb } from '@shared/types/db';
 
 const analyticsPermissions: PluginPermission[] = [
   { resource: 'product', actions: ['read'] },
@@ -38,7 +37,7 @@ class AnalyticsPlugin implements IPlugin {
     };
   }
 
-  init(db: AnyDb): void {
+  init(db: Db): void {
     this.module = new AnalyticsModule(db);
   }
 

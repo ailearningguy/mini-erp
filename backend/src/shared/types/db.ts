@@ -1,3 +1,9 @@
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+
+export type Db = PostgresJsDatabase<Record<string, unknown>>;
+
+export type Transaction = PostgresJsDatabase<Record<string, unknown>>;
+
 export type AnyDb = Record<string, unknown>;
 
 export interface PgColumn {

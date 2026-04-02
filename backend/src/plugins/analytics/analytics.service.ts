@@ -2,13 +2,13 @@ import { eq, gt, and, gte, lte } from 'drizzle-orm';
 import { analyticsEvents } from './analytics.schema';
 import type { AnalyticsQuery } from './dto/analytics-query.dto';
 import type { EventEnvelope } from '@shared/types/event';
-import type { AnyDb } from '@shared/types/db';
+import type { Db } from '@shared/types/db';
 
 export class AnalyticsService {
-  constructor(private readonly db: AnyDb) {}
+  constructor(private readonly db: Db) {}
 
   async recordEvent(event: EventEnvelope): Promise<void> {
-    await (this.db as any).insert(analyticsEvents).values({
+    await this.db.insert(analyticsEvents).values({
       eventType: event.type,
       aggregateId: event.aggregate_id,
       data: event.payload,
@@ -31,14 +31,13 @@ export class AnalyticsService {
       conditions.push(gt(analyticsEvents.id, query.cursor));
     }
 
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-    let qb = (this.db as any).select().from(analyticsEvents);
-    if (whereClause) {
-      qb = qb.where(whereClause);
+    const baseQuery = this.db.select().from(analyticsEvents);
+    let result;
+    if (conditions.length > 0) {
+      result = await baseQuery.where(and(...conditions)).limit(query.limit + 1);
+    } else {
+      result = await baseQuery.limit(query.limit + 1);
     }
-
-    const result = await qb.limit(query.limit + 1);
 
     const hasMore = result.length > query.limit;
     const items = hasMore ? result.slice(0, query.limit) : result;
@@ -48,7 +47,7 @@ export class AnalyticsService {
   }
 
   async getEventCount(): Promise<number> {
-    const result = await (this.db as any)
+    const result = await this.db
       .select({ count: analyticsEvents.id })
       .from(analyticsEvents);
     return result.length;

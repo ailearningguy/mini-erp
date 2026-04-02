@@ -54,4 +54,35 @@ describe('DIContainer', () => {
       expect(() => container.validateGraph()).not.toThrow();
     });
   });
+
+  describe('plugin restriction', () => {
+    it('should allow core to register any token', () => {
+      container.setActor('core');
+      expect(() => container.register('ProductRepository', () => ({}))).not.toThrow();
+    });
+
+    it('should block plugin from registering repository tokens', () => {
+      container.setActor('plugin:analytics');
+      expect(() => container.register('ProductRepository', () => ({}))).toThrow(
+        /cannot register.*repository/i,
+      );
+    });
+
+    it('should block plugin from registering schema tokens', () => {
+      container.setActor('plugin:analytics');
+      expect(() => container.register('Product.schema', () => ({}))).toThrow(
+        /cannot register.*schema/i,
+      );
+    });
+
+    it('should allow plugin to register non-restricted tokens', () => {
+      container.setActor('plugin:analytics');
+      expect(() => container.register('AnalyticsService', () => ({}))).not.toThrow();
+    });
+
+    it('should allow plugin to register service interface tokens', () => {
+      container.setActor('plugin:analytics');
+      expect(() => container.register('IProductService', () => ({}))).not.toThrow();
+    });
+  });
 });
