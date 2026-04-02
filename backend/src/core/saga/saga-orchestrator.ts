@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { sagaState } from './saga.schema';
 import type { Db } from '@shared/types/db';
+import type { ISagaOrchestrator } from './saga-orchestrator.interface';
 
 enum SagaStatus {
   PENDING = 'PENDING',
@@ -51,7 +52,7 @@ interface SagaStateRecord {
   ttlAt: Date | null;
 }
 
-class SagaOrchestrator {
+class SagaOrchestrator implements ISagaOrchestrator {
   constructor(private readonly db: Db) {}
 
   async startSaga<TContext>(

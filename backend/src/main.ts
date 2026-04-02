@@ -303,6 +303,7 @@ async function bootstrap(): Promise<void> {
   // --- Wire Saga Orchestrator ---
   const sagaOrchestrator = new SagaOrchestrator(db);
   logger.info('SagaOrchestrator initialized');
+  container.register('ISagaOrchestrator', () => sagaOrchestrator);
 
   const amqpConsumer = new AmqpConsumer(eventConsumer, {
     rabbitmqUrl: config.rabbitmq.url,

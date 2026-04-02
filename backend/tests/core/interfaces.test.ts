@@ -24,4 +24,20 @@ describe('Core interfaces', () => {
     );
     expect(content).toContain('implements IEventBus');
   });
+
+  it('should have ISagaOrchestrator interface file', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const interfacePath = path.resolve(__dirname, '../../src/core/saga/saga-orchestrator.interface.ts');
+    expect(fs.existsSync(interfacePath)).toBe(true);
+  });
+
+  it('ISagaOrchestrator should have startSaga method', () => {
+    const content = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../src/core/saga/saga-orchestrator.interface.ts'),
+      'utf-8',
+    );
+    expect(content).toMatch(/startSaga\s*[<(]/);
+    expect(content).toContain('interface ISagaOrchestrator');
+  });
 });
