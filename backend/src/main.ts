@@ -28,6 +28,8 @@ import { ApiIdempotencyStore } from '@core/idempotency/api-idempotency';
 import { createRateLimiter } from '@core/api/rate-limiter';
 import { API_CONSTANTS, EVENT_CONSTANTS } from '@shared/constants';
 import { logger } from '@core/logging/logger';
+import { metricsService } from '@core/metrics/metrics.service';
+import { createMetricsHandler } from '@core/metrics/metrics-endpoint';
 import type { Db } from '@shared/types/db';
 
 async function bootstrap(): Promise<void> {
@@ -266,6 +268,9 @@ async function bootstrap(): Promise<void> {
     const allOk = checks.every((c) => c.ok);
     res.status(allOk ? 200 : 503).json({ status: allOk ? 'ok' : 'degraded', checks });
   });
+
+  // --- Metrics endpoint ---
+  app.get('/metrics', createMetricsHandler(metricsService));
 
   // --- Global error handler ---
   app.use(globalErrorHandler as express.ErrorRequestHandler);
