@@ -27,6 +27,14 @@ class EventSchemaRegistry {
   getRegisteredTypes(): string[] {
     return [...this.schemas.keys()];
   }
+
+  unregister(eventType: string): void {
+    this.schemas.delete(eventType);
+  }
+
+  clear(): void {
+    this.schemas.clear();
+  }
 }
 
 export { EventSchemaRegistry };
