@@ -35,28 +35,31 @@ describe('ArchitectureValidator', () => {
   describe('validateNoCoreToModule', () => {
     it('should throw when core depends on module', () => {
       const graph: DependencyGraph = {
-        nodes: ['core/event-bus', 'modules/product'],
-        edges: [{ from: 'core/event-bus', to: 'modules/product' }],
+        nodes: ['EventBus', 'IProductService'],
+        edges: [{ from: 'EventBus', to: 'IProductService' }],
       };
-      expect(() => validator.validateNoCoreToModule(graph)).toThrow(/Core must not depend on modules/);
+      const moduleTokens = ['IProductService', 'IOrderService'];
+      expect(() => validator.validateNoCoreToModule(graph, moduleTokens)).toThrow(/Core must not depend on modules/);
     });
 
     it('should pass when no core-to-module edges', () => {
       const graph: DependencyGraph = {
-        nodes: ['core/event-bus', 'modules/product'],
-        edges: [{ from: 'modules/product', to: 'core/event-bus' }],
+        nodes: ['EventBus', 'IProductService'],
+        edges: [{ from: 'IProductService', to: 'EventBus' }],
       };
-      expect(() => validator.validateNoCoreToModule(graph)).not.toThrow();
+      const moduleTokens = ['IProductService', 'IOrderService'];
+      expect(() => validator.validateNoCoreToModule(graph, moduleTokens)).not.toThrow();
     });
   });
 
   describe('validateNoCoreToPlugin', () => {
     it('should throw when core depends on plugin', () => {
       const graph: DependencyGraph = {
-        nodes: ['core/proxy', 'plugins/analytics'],
-        edges: [{ from: 'core/proxy', to: 'plugins/analytics' }],
+        nodes: ['ProxyService', 'analytics'],
+        edges: [{ from: 'ProxyService', to: 'analytics' }],
       };
-      expect(() => validator.validateNoCoreToPlugin(graph)).toThrow(/Core must not depend on plugins/);
+      const pluginTokens = ['analytics'];
+      expect(() => validator.validateNoCoreToPlugin(graph, pluginTokens)).toThrow(/Core must not depend on plugins/);
     });
   });
 
