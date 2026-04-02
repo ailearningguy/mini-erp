@@ -62,7 +62,7 @@ class ModuleInstaller {
       name: m.name,
       version: m.version,
       enabled: m.enabled,
-      dependencies: m.dependencies,
+      dependencies: m.dependencies.map(d => d.name),
     }));
   }
 

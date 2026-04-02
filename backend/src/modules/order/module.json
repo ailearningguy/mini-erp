@@ -1,0 +1,7 @@
+{
+  "name": "order",
+  "version": "2026.04.01",
+  "enabled": true,
+  "dependencies": ["product"],
+  "description": "Order management"
+}

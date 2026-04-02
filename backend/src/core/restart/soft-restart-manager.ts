@@ -1,7 +1,7 @@
 import type { TrafficGate } from '@core/traffic/traffic-gate';
 import type { RequestTracker } from '@core/traffic/request-tracker';
 import type { PluginLoader } from '@core/plugin-system/plugin-loader';
-import type { DIContainer } from '@core/di/container';
+import type { DIContainer, ModuleMetadata } from '@core/di/container';
 import type { AmqpConsumer } from '@core/consumer/amqp-consumer';
 import type { QueueManager } from '@core/jobs/queue-manager';
 import { metricsService } from '@core/metrics/metrics.service';
@@ -10,10 +10,6 @@ interface Logger {
   info(obj: Record<string, unknown>, msg: string): void;
   warn(obj: Record<string, unknown>, msg: string): void;
   error(obj: Record<string, unknown>, msg: string): void;
-}
-
-interface ActivePlugin {
-  name: string;
 }
 
 class SoftRestartManager {
@@ -27,7 +23,7 @@ class SoftRestartManager {
     private logger: Logger,
   ) {}
 
-  private getActivePlugins(): ActivePlugin[] {
+  private getActivePlugins(): ModuleMetadata[] {
     return [];
   }
 

@@ -17,9 +17,7 @@ import { PluginLoader, PluginGuard } from '@core/plugin-system/plugin-loader';
 import { ExternalServiceProxy } from '@core/external-integration/proxy';
 import { CacheService } from '@core/cache/cache.service';
 import { ArchitectureValidator } from '@core/architecture-validator/validator';
-import { ModuleRegistry } from '@core/module-registry/registry';
-import { ProductModule } from '@modules/product/product.module';
-import { OrderModule } from '@modules/order/order.module';
+import { ModuleRegistry, FsModuleRegistry } from '@core/module-registry/registry';
 import { SagaOrchestrator } from '@core/saga/saga-orchestrator';
 import { AnalyticsPlugin } from '@plugins/analytics/analytics.plugin';
 import { requestIdMiddleware, snakeCaseMiddleware, snakeCaseResponseMiddleware, globalErrorHandler } from '@core/api/response';
@@ -92,6 +90,10 @@ async function bootstrap(): Promise<void> {
     return new OutboxRepository(db);
   }, ['Database']);
   container.register('ModuleRegistry', () => new ModuleRegistry());
+  container.registerCore('ExpressApp', { useFactory: () => app });
+  container.registerCore('FsModuleRegistry', {
+    useFactory: () => new FsModuleRegistry(path.join(__dirname, 'modules'), logger),
+  });
   container.register('EventBus', () => {
     const outboxRepo = container.resolve<OutboxRepository>('OutboxRepository');
     const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
@@ -169,31 +171,10 @@ async function bootstrap(): Promise<void> {
   // --- Auth (after rate limiter + idempotency) ---
   app.use('/api', authMiddleware(config, tokenRevocationService));
 
-  // --- Register modules ---
-  const db = container.resolve<Db>('Database');
-  const eventBus = container.resolve<EventBus>('EventBus');
-  const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
-  const moduleRegistry = container.resolve<ModuleRegistry>('ModuleRegistry');
-  const cacheService = container.resolve<CacheService>('CacheService');
-
-  const productModule = new ProductModule({ db, eventBus, schemaRegistry });
-  productModule.registerRoutes(app);
-  productModule.registerWithRegistry(
-    {
-      registerRateLimits: (mod, cfgs) => moduleRegistry.registerRateLimits(mod, cfgs),
-      registerEventHandler: (mod, type, handler) => moduleRegistry.registerEventHandler(mod, type, handler),
-    },
-    cacheService,
-  );
-
-  const orderModule = new OrderModule();
-  orderModule.registerWithRegistry({
-    registerRateLimits: (mod, cfgs) => moduleRegistry.registerRateLimits(mod, cfgs),
-  });
-
-  // Update EventRateLimiter with registered rate limits from modules
-  const eventRateLimiter = container.resolve<EventRateLimiter>('EventRateLimiter');
-  eventRateLimiter.updateConfigs(moduleRegistry.getAllRateLimits());
+  // --- Register modules via FsModuleRegistry ---
+  const fsRegistry = container.get<FsModuleRegistry>('FsModuleRegistry');
+  await fsRegistry.refresh();
+  await container.build(fsRegistry.getActive());
 
   // --- Register plugins ---
   const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
@@ -249,9 +230,11 @@ async function bootstrap(): Promise<void> {
   const eventConsumer = container.resolve<EventConsumer>('EventConsumer');
   analyticsPlugin.setEventConsumer(eventConsumer);
 
-  // Register event handlers from module registry
-  for (const reg of moduleRegistry.getEventHandlers()) {
-    eventConsumer.registerHandler(reg.eventType, reg.handler);
+  // Register event handlers from FsModuleRegistry (modules now use container.get() directly)
+  const fsReg = container.get<FsModuleRegistry>('FsModuleRegistry');
+  const pendingHooks = container.getPendingHooks();
+  for (const hook of pendingHooks) {
+    eventConsumer.registerHandler(hook.point, hook.handler);
   }
 
   // --- Wire Saga Orchestrator ---

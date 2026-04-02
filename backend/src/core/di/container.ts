@@ -1,9 +1,5 @@
 type Factory<T = unknown> = () => T;
 
-interface ActivePlugin {
-  name: string;
-}
-
 interface ServiceRegistration<T = unknown> {
   factory: Factory<T>;
   singleton: boolean;
@@ -12,22 +8,54 @@ interface ServiceRegistration<T = unknown> {
 }
 
 interface IModule {
-  name: string;
-  onInit: () => Promise<void>;
-  onDestroy: () => Promise<void>;
+  readonly name: string;
+  onInit(): Promise<void>;
+  onDestroy(): Promise<void>;
 }
 
-interface IModuleFactory {
-  create: () => { providers: Array<{ token: string; factory: Factory }>; module: IModule };
+interface ModuleFactory {
+  create(container: DIContainer): Promise<ModuleDefinition> | ModuleDefinition;
+}
+
+interface ModuleDefinition {
+  module: IModule;
+  providers: ProviderRegistration[];
+  exports?: string[];
+  hooks?: HookRegistrationStub[];
+}
+
+interface ProviderRegistration<T = unknown> {
+  token: string;
+  useClass?: new (...args: unknown[]) => T;
+  useFactory?: (container: DIContainer) => Promise<T> | T;
+  deps?: string[];
+  scope?: 'singleton' | 'transient';
+  moduleName?: string;
+  exported?: boolean;
 }
 
 interface ModuleMetadata {
   name: string;
   version: string;
   enabled: boolean;
-  dependencies: string[];
-  entry: () => Promise<IModuleFactory>;
-  manifest: { name: string; version: string; enabled: boolean };
+  dependencies: { name: string; version: string }[];
+  entry: () => Promise<{ default: ModuleFactory }>;
+  manifest: ModuleManifest;
+}
+
+interface ModuleManifest {
+  name: string;
+  version: string;
+  enabled: boolean;
+  dependencies?: string[];
+  description?: string;
+}
+
+interface HookRegistrationStub {
+  point: string;
+  phase: 'pre' | 'post';
+  handler: (ctx: any) => Promise<void>;
+  priority?: number;
 }
 
 type ContainerState = 'IDLE' | 'BUILDING' | 'READY' | 'DISPOSING';
@@ -38,14 +66,29 @@ const RESTRICTED_TOKEN_PATTERNS = [
   /schema\./i,
 ];
 
+interface Disposable {
+  dispose(): Promise<void>;
+}
+
+function isDisposable(obj: unknown): obj is Disposable {
+  const maybeDisposable = obj as Record<string, unknown>;
+  return obj !== null && typeof obj === 'object' && 'dispose' in maybeDisposable && typeof maybeDisposable.dispose === 'function';
+}
+
 class DIContainer {
   private services = new Map<string, ServiceRegistration>();
   private resolving = new Set<string>();
   private currentActor: string = 'core';
-  private modules: IModule[] = [];
-  private moduleInstances = new Map<string, unknown>();
+
+  private coreProviders = new Map<string, ProviderRegistration>();
   private coreInstances = new Map<string, unknown>();
+  private moduleProviders = new Map<string, ProviderRegistration>();
+  private moduleInstances = new Map<string, unknown>();
+  private modules: IModule[] = [];
   private containerState: ContainerState = 'IDLE';
+  private buildMutex: Promise<void> = Promise.resolve();
+  private pendingHooks: HookRegistrationStub[] = [];
+  private exportedTokens = new Map<string, string>();
 
   setActor(actor: string): void {
     this.currentActor = actor;
@@ -70,9 +113,26 @@ class DIContainer {
     this.services.set(token, { factory, singleton, deps });
   }
 
-  registerCore(token: string, definition: { useFactory: () => unknown }): void {
-    const factory = definition.useFactory;
-    this.services.set(token, { factory, singleton: true, deps: [] });
+  registerCore<T>(token: string, provider: { useFactory: (container: DIContainer) => Promise<T> | T }): void {
+    if (this.coreProviders.has(token) || this.services.has(token)) {
+      throw new Error(`Service already registered: ${token}`);
+    }
+    this.coreProviders.set(token, { token, useFactory: provider.useFactory, moduleName: '__core__' });
+    const instance = provider.useFactory(this);
+    this.coreInstances.set(token, instance);
+  }
+
+  get<T>(token: string): T {
+    if (this.services.has(token)) {
+      return this.resolve<T>(token);
+    }
+    if (this.coreInstances.has(token)) {
+      return this.coreInstances.get(token) as T;
+    }
+    if (this.moduleInstances.has(token)) {
+      return this.moduleInstances.get(token) as T;
+    }
+    throw new Error(`Service not found: ${token}`);
   }
 
   resolve<T>(token: string): T {
@@ -101,10 +161,6 @@ class DIContainer {
     } finally {
       this.resolving.delete(token);
     }
-  }
-
-  get<T>(token: string): T {
-    return this.resolve<T>(token);
   }
 
   validateGraph(): void {
@@ -160,35 +216,280 @@ class DIContainer {
     return this.services.get(token)?.deps ?? [];
   }
 
-  async rebuild(_plugins: ActivePlugin[]): Promise<void> {
+  async rebuild(modules: ModuleMetadata[]): Promise<void> {
+    const prev = this.buildMutex;
+    let release: () => void;
+    this.buildMutex = new Promise<void>(r => { release = r; });
+    await prev;
+
+    try {
+      const snapshot = {
+        providers: new Map(this.moduleProviders),
+        instances: new Map(this.moduleInstances),
+        modules: [...this.modules],
+        exports: new Map(this.exportedTokens),
+        hooks: [...this.pendingHooks],
+      };
+
+      try {
+        await this.disposeInternal();
+        await this.buildInternal(modules);
+      } catch (err) {
+        this.moduleProviders = snapshot.providers;
+        this.moduleInstances = snapshot.instances;
+        this.modules = snapshot.modules;
+        this.exportedTokens = snapshot.exports;
+        this.pendingHooks = snapshot.hooks;
+        this.containerState = 'READY';
+        throw new Error(`Rebuild failed, rolled back to previous state: ${err}`);
+      }
+    } finally {
+      release!();
+    }
   }
 
   async build(modules: ModuleMetadata[]): Promise<void> {
-    if (this.containerState !== 'IDLE') {
-      throw new Error(`Cannot build from state: ${this.containerState}`);
-    }
-    this.containerState = 'BUILDING';
+    const prev = this.buildMutex;
+    let release: () => void;
+    this.buildMutex = new Promise<void>(r => { release = r; });
+    await prev;
 
-    for (const metadata of modules) {
-      if (!metadata.enabled) continue;
+    try {
+      this.assertContainerState('IDLE');
+      this.containerState = 'BUILDING';
 
-      const factory = await metadata.entry();
-      const { providers, module } = factory.create();
+      const enabledModules = modules.filter(m => m.enabled);
+      const loaded = await Promise.all(
+        enabledModules.map(async m => {
+          try {
+            const mod = await m.entry();
+            return { metadata: m, factory: mod.default ?? mod };
+          } catch (err) {
+            throw new Error(`Failed to load module "${m.name}": ${err}`);
+          }
+        }),
+      );
 
-      for (const provider of providers) {
-        this.register(provider.token, provider.factory);
+      for (const { metadata, factory } of loaded) {
+        const def = await Promise.resolve(factory.create(this));
+
+        for (const provider of def.providers) {
+          provider.moduleName = metadata.name;
+          if (this.moduleProviders.has(provider.token)) {
+            throw new Error(`Duplicate provider token "${provider.token}" in module "${metadata.name}"`);
+          }
+          this.moduleProviders.set(provider.token, provider);
+        }
+
+        if (def.exports) {
+          for (const token of def.exports) {
+            this.exportedTokens.set(token, metadata.name);
+          }
+        }
+
+        if (def.hooks) {
+          this.pendingHooks.push(...def.hooks);
+        }
+
+        this.modules.push(def.module);
       }
 
-      await module.onInit();
-      this.modules.push(module);
-      this.moduleInstances.set(metadata.name, module);
-    }
+      this.validateExtendedGraph();
 
-    this.containerState = 'READY';
+      for (const [token, provider] of this.moduleProviders) {
+        if (provider.scope !== 'transient') {
+          await this.instantiateFromProvider(token, 'module');
+        }
+      }
+
+      for (const m of this.modules) {
+        try {
+          await m.onInit();
+        } catch (err) {
+          throw new Error(`Module "${m.name}" onInit() failed: ${err}`);
+        }
+      }
+
+      this.containerState = 'READY';
+    } catch (err) {
+      this.containerState = 'IDLE';
+      this.moduleInstances.clear();
+      this.moduleProviders.clear();
+      this.modules = [];
+      throw err;
+    } finally {
+      release!();
+    }
   }
 
   async dispose(): Promise<void> {
-    await this.disposeInternal();
+    const prev = this.buildMutex;
+    let release: () => void;
+    this.buildMutex = new Promise<void>(r => { release = r; });
+    await prev;
+
+    try {
+      if (this.containerState !== 'READY') return;
+
+      this.containerState = 'DISPOSING';
+
+      for (const m of [...this.modules].reverse()) {
+        try {
+          await m.onDestroy();
+        } catch (err) {
+          console.error(`Module "${m.name}" onDestroy() error:`, err);
+        }
+      }
+
+      for (const [_token, instance] of this.moduleInstances) {
+        if (isDisposable(instance)) {
+          try {
+            await instance.dispose();
+          } catch (err) {
+            console.error(`Dispose error for "${_token}":`, err);
+          }
+        }
+      }
+
+      this.moduleInstances.clear();
+      this.moduleProviders.clear();
+      this.exportedTokens.clear();
+      this.pendingHooks = [];
+      this.modules = [];
+
+      if (this.services.has('EventSchemaRegistry')) {
+        const schemaReg = this.resolve('EventSchemaRegistry') as { clear?: () => void } | undefined;
+        if (schemaReg?.clear) {
+          schemaReg.clear();
+        }
+      }
+
+      if (this.services.has('EventConsumer')) {
+        const eventConsumer = this.resolve('EventConsumer') as { unregisterAll?: () => void } | undefined;
+        if (eventConsumer?.unregisterAll) {
+          eventConsumer.unregisterAll();
+        }
+      }
+
+      this.containerState = 'IDLE';
+    } finally {
+      release!();
+    }
+  }
+
+  getExportedTokens(): Map<string, string> {
+    return new Map(this.exportedTokens);
+  }
+
+  getPendingHooks(): HookRegistrationStub[] {
+    return [...this.pendingHooks];
+  }
+
+  private assertContainerState(expected: 'IDLE' | 'READY'): void {
+    if (this.containerState !== expected) {
+      throw new Error(`Container is ${this.containerState}, expected ${expected}`);
+    }
+  }
+
+  private async instantiateFromProvider(token: string, scope: 'core' | 'module'): Promise<unknown> {
+    const instances = scope === 'core' ? this.coreInstances : this.moduleInstances;
+    const providers = scope === 'core' ? this.coreProviders : this.moduleProviders;
+
+    if (instances.has(token)) return instances.get(token);
+
+    const provider = providers.get(token) ?? this.coreProviders.get(token);
+    if (!provider) throw new Error(`Provider not found: ${token}`);
+
+    let instance: unknown;
+    if (provider.useFactory) {
+      instance = await provider.useFactory(this);
+    } else if (provider.useClass) {
+      const deps = (provider.deps ?? []).map(dep => this.get(dep));
+      instance = new provider.useClass(...deps);
+    } else {
+      throw new Error(`Provider "${token}" has no useClass or useFactory`);
+    }
+
+    if (provider.scope !== 'transient') {
+      instances.set(token, instance);
+    }
+    return instance;
+  }
+
+  private validateExtendedGraph(): void {
+    const allTokens = new Set<string>([
+      ...this.coreProviders.keys(),
+      ...this.moduleProviders.keys(),
+    ]);
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+
+    const visit = (token: string) => {
+      if (visiting.has(token)) {
+        throw new Error(`Circular dependency detected: ${token}`);
+      }
+      if (visited.has(token)) return;
+
+      visiting.add(token);
+      const provider = this.coreProviders.get(token) ?? this.moduleProviders.get(token);
+      for (const dep of provider?.deps ?? []) {
+        if (!allTokens.has(dep)) {
+          throw new Error(`Missing dependency: "${dep}" required by "${token}"`);
+        }
+        visit(dep);
+      }
+      visiting.delete(token);
+      visited.add(token);
+    };
+
+    for (const token of allTokens) {
+      visit(token);
+    }
+  }
+
+  private async buildInternal(modules: ModuleMetadata[]): Promise<void> {
+    this.assertContainerState('IDLE');
+    this.containerState = 'BUILDING';
+
+    const enabledModules = modules.filter(m => m.enabled);
+    const loaded = await Promise.all(
+      enabledModules.map(async m => {
+        try {
+          const mod = await m.entry();
+          return { metadata: m, factory: mod.default ?? mod };
+        } catch (err) {
+          throw new Error(`Failed to load module "${m.name}": ${err}`);
+        }
+      }),
+    );
+
+    for (const { metadata, factory } of loaded) {
+      const def = await Promise.resolve(factory.create(this));
+      for (const provider of def.providers) {
+        provider.moduleName = metadata.name;
+        this.moduleProviders.set(provider.token, provider);
+      }
+      if (def.exports) {
+        for (const token of def.exports) {
+          this.exportedTokens.set(token, metadata.name);
+        }
+      }
+      this.modules.push(def.module);
+    }
+
+    this.validateExtendedGraph();
+
+    for (const [token, provider] of this.moduleProviders) {
+      if (provider.scope !== 'transient') {
+        await this.instantiateFromProvider(token, 'module');
+      }
+    }
+
+    for (const m of this.modules) {
+      await m.onInit();
+    }
+
+    this.containerState = 'READY';
   }
 
   private async disposeInternal(): Promise<void> {
@@ -198,35 +499,27 @@ class DIContainer {
     for (const m of [...this.modules].reverse()) {
       try { await m.onDestroy(); } catch (err) { console.error(err); }
     }
-
-    for (const [_token, instance] of this.moduleInstances) {
-      if (instance && typeof (instance as { dispose?: () => Promise<void> }).dispose === 'function') {
-        try { await (instance as { dispose: () => Promise<void> }).dispose(); } catch (err) { console.error(err); }
-      }
-    }
-
-    if (this.services.has('EventSchemaRegistry')) {
-      const schemaReg = this.resolve('EventSchemaRegistry') as { clear?: () => void } | undefined;
-      if (schemaReg?.clear) {
-        schemaReg.clear();
-      }
-    }
-
-    if (this.services.has('EventConsumer')) {
-      const eventConsumer = this.resolve('EventConsumer') as { unregisterAll?: () => void } | undefined;
-      if (eventConsumer?.unregisterAll) {
-        eventConsumer.unregisterAll();
+    for (const [token, instance] of this.moduleInstances) {
+      if (isDisposable(instance)) {
+        try { await instance.dispose(); } catch (err) { console.error(`Dispose error for "${token}":`, err); }
       }
     }
 
     this.moduleInstances.clear();
+    this.moduleProviders.clear();
+    this.exportedTokens.clear();
+    this.pendingHooks = [];
     this.modules = [];
     this.containerState = 'IDLE';
   }
 }
 
-interface ActivePlugin {
-  name: string;
-}
-
-export { DIContainer, IModule, IModuleFactory, ModuleMetadata, ActivePlugin };
+export { DIContainer };
+export type {
+  IModule,
+  ModuleFactory,
+  ModuleDefinition,
+  ProviderRegistration,
+  ModuleMetadata,
+  ModuleManifest,
+};

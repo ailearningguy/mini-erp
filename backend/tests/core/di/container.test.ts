@@ -1,5 +1,151 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { DIContainer } from '@core/di/container';
+import { DIContainer, IModule, ModuleFactory, ModuleMetadata } from '@core/di/container';
+
+describe('IModule interface contract', () => {
+  it('should require name, onInit, and onDestroy', async () => {
+    const mod = {
+      name: 'test',
+      onInit: async () => {},
+      onDestroy: async () => {},
+    };
+
+    expect(mod.name).toBe('test');
+    expect(typeof mod.onInit).toBe('function');
+    expect(typeof mod.onDestroy).toBe('function');
+    await mod.onInit();
+    await mod.onDestroy();
+  });
+});
+
+describe('DIContainer core/module scope', () => {
+  let container: DIContainer;
+
+  beforeEach(() => {
+    container = new DIContainer();
+  });
+
+  it('registerCore should register a provider that survives dispose', async () => {
+    container.registerCore('DbPool', { useFactory: () => 'mock-db' });
+    expect(container.get('DbPool')).toBe('mock-db');
+
+    await container.build([]);
+    await container.dispose();
+
+    expect(container.get('DbPool')).toBe('mock-db');
+  });
+
+  it('dispose should be idempotent', async () => {
+    container.registerCore('DbPool', { useFactory: () => 'mock-db' });
+    await container.build([]);
+
+    await container.dispose();
+    await container.dispose();
+    await container.dispose();
+
+    expect(container.get('DbPool')).toBe('mock-db');
+  });
+
+  it('build should call module.onInit()', async () => {
+    const onInitMock = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    const onDestroyMock = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+
+    const mockFactory: ModuleFactory = {
+      create: async () => ({
+        module: { name: 'test', onInit: onInitMock, onDestroy: onDestroyMock },
+        providers: [],
+      }),
+    };
+
+    const metadata: ModuleMetadata = {
+      name: 'test',
+      version: '2026.04.01',
+      enabled: true,
+      dependencies: [],
+      entry: async () => ({ default: mockFactory }),
+      manifest: { name: 'test', version: '2026.04.01', enabled: true },
+    };
+
+    await container.build([metadata]);
+
+    expect(onInitMock).toHaveBeenCalled();
+  });
+
+  it('dispose should call module.onDestroy() in reverse order', async () => {
+    const order: string[] = [];
+
+    const makeModule = (name: string): IModule => ({
+      name,
+      onInit: async () => {},
+      onDestroy: async () => { order.push(name); },
+    });
+
+    const makeFactory = (mod: IModule): ModuleFactory => ({
+      create: async () => ({ module: mod, providers: [] }),
+    });
+
+    const toMeta = (name: string, factory: ModuleFactory): ModuleMetadata => ({
+      name,
+      version: '2026.04.01',
+      enabled: true,
+      dependencies: [],
+      entry: async () => ({ default: factory }),
+      manifest: { name, version: '2026.04.01', enabled: true },
+    });
+
+    await container.build([
+      toMeta('alpha', makeFactory(makeModule('alpha'))),
+      toMeta('beta', makeFactory(makeModule('beta'))),
+    ]);
+
+    await container.dispose();
+
+    expect(order).toEqual(['beta', 'alpha']);
+  });
+
+  it('rebuild should rollback on failure', async () => {
+    container.registerCore('DbPool', { useFactory: () => 'mock-db' });
+
+    const goodFactory: ModuleFactory = {
+      create: async () => ({
+        module: {
+          name: 'good',
+          onInit: async () => {},
+          onDestroy: async () => {},
+        },
+        providers: [{ token: 'GoodService', useFactory: () => 'good' }],
+      }),
+    };
+
+    const badFactory: ModuleFactory = {
+      create: async () => {
+        throw new Error('factory exploded');
+      },
+    };
+
+    const toMeta = (name: string, factory: ModuleFactory): ModuleMetadata => ({
+      name,
+      version: '2026.04.01',
+      enabled: true,
+      dependencies: [],
+      entry: async () => ({ default: factory }),
+      manifest: { name, version: '2026.04.01', enabled: true },
+    });
+
+    await container.build([toMeta('good', goodFactory)]);
+    expect(container.get('GoodService')).toBe('good');
+
+    await expect(
+      container.rebuild([toMeta('bad', badFactory)]),
+    ).rejects.toThrow(/rolled back/i);
+
+    expect(container.get('GoodService')).toBe('good');
+  });
+
+  it('get should resolve from core scope', () => {
+    container.registerCore('Redis', { useFactory: () => 'redis-client' });
+    expect(container.get('Redis')).toBe('redis-client');
+  });
+});
 
 describe('DIContainer', () => {
   let container: DIContainer;

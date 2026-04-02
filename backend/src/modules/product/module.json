@@ -1,0 +1,7 @@
+{
+  "name": "product",
+  "version": "2026.04.01",
+  "enabled": true,
+  "dependencies": [],
+  "description": "Product catalog management"
+}
