@@ -38,6 +38,7 @@ import { SoftRestartManager } from '@core/restart/soft-restart-manager';
 import { ModuleInstaller } from '@core/module-installer/module-installer';
 import { createModuleRoutes } from '@core/module-installer/module.routes';
 import type { Db } from '@shared/types/db';
+import { HookRegistry, HookExecutor, detectHookConflicts } from '@core/hooks';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
@@ -93,6 +94,13 @@ async function bootstrap(): Promise<void> {
   container.registerCore('ExpressApp', { useFactory: () => app });
   container.registerCore('FsModuleRegistry', {
     useFactory: () => new FsModuleRegistry(path.join(__dirname, 'modules'), logger),
+  });
+  container.registerCore('HookRegistry', {
+    useFactory: () => new HookRegistry(),
+  });
+  container.registerCore('HookExecutor', {
+    useFactory: (c) => new HookExecutor(c.get('HookRegistry'), logger),
+    deps: ['HookRegistry'],
   });
   container.register('EventBus', () => {
     const outboxRepo = container.resolve<OutboxRepository>('OutboxRepository');
@@ -175,6 +183,9 @@ async function bootstrap(): Promise<void> {
   const fsRegistry = container.get<FsModuleRegistry>('FsModuleRegistry');
   await fsRegistry.refresh();
   await container.build(fsRegistry.getActive());
+
+  const hookRegistry = container.get<HookRegistry>('HookRegistry');
+  detectHookConflicts(hookRegistry.getAllHooks());
 
   // --- Register plugins ---
   const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
