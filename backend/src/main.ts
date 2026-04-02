@@ -31,6 +31,10 @@ import { logger } from '@core/logging/logger';
 import { metricsService } from '@core/metrics/metrics.service';
 import { createMetricsHandler } from '@core/metrics/metrics-endpoint';
 import { QueueManager } from '@core/jobs/queue-manager';
+import { TrafficGate } from '@core/traffic/traffic-gate';
+import { RequestTracker } from '@core/traffic/request-tracker';
+import { SystemStateManager } from '@core/restart/system-state';
+import { SoftRestartManager } from '@core/restart/soft-restart-manager';
 import type { Db } from '@shared/types/db';
 
 async function bootstrap(): Promise<void> {
@@ -44,6 +48,14 @@ async function bootstrap(): Promise<void> {
   app.use(requestIdMiddleware);
   app.use(snakeCaseMiddleware);
   app.use(snakeCaseResponseMiddleware);
+
+  // --- Traffic Control for soft restart ---
+  const trafficGate = new TrafficGate();
+  const requestTracker = new RequestTracker();
+  const systemStateManager = new SystemStateManager();
+
+  app.use(trafficGate.middleware);
+  app.use(requestTracker.middleware);
 
   // --- DI Container ---
   const container = new DIContainer();
@@ -247,12 +259,34 @@ async function bootstrap(): Promise<void> {
   await amqpConsumer.connect();
   await amqpConsumer.start();
 
+  // --- SoftRestartManager ---
+  const pluginLoader = container.resolve<PluginLoader>('PluginLoader');
+  const softRestartManager = new SoftRestartManager(
+    trafficGate,
+    requestTracker,
+    pluginLoader,
+    container,
+    amqpConsumer,
+    queueManager,
+    logger,
+  );
+  logger.info('SoftRestartManager initialized');
+
   // --- Health check ---
   app.get('/health/liveness', (_req, res) => {
     res.json({ status: 'ok' });
   });
 
   app.get('/health/readiness', async (_req, res) => {
+    const systemState = systemStateManager.getState();
+
+    if (systemState === 'RESTARTING') {
+      return res.status(503).json({
+        status: 'restarting',
+        system_state: systemState,
+      });
+    }
+
     const checks = [];
 
     try {
