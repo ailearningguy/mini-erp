@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { EventEnvelope } from '@shared/types/event';
+import type { IEventBus } from './event-bus.interface';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
 import { OutboxRepository } from '@core/outbox/outbox.repository';
 import type { Db } from '@shared/types/db';
 
-class EventBus {
+class EventBus implements IEventBus {
   constructor(
     private readonly outboxRepo: OutboxRepository,
     private readonly schemaRegistry: EventSchemaRegistry,

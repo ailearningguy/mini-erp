@@ -7,6 +7,7 @@ import Redis from 'ioredis';
 import { loadConfig } from '@core/config/config';
 import { DIContainer } from '@core/di/container';
 import { EventBus } from '@core/event-bus/event-bus';
+import type { IEventBus } from '@core/event-bus/event-bus.interface';
 import { OutboxRepository } from '@core/outbox/outbox.repository';
 import { EventSchemaRegistry } from '@core/event-schema-registry/registry';
 import { EventRateLimiter } from '@core/consumer/rate-limiter';
@@ -123,6 +124,7 @@ async function bootstrap(): Promise<void> {
     const schemaRegistry = container.resolve<EventSchemaRegistry>('EventSchemaRegistry');
     return new EventBus(outboxRepo, schemaRegistry);
   }, ['OutboxRepository', 'EventSchemaRegistry']);
+  container.register('IEventBus', () => container.resolve<EventBus>('EventBus'), ['EventBus']);
   container.register('ProcessedEventStore', () => {
     const db = container.resolve<Db>('Database');
     return new ProcessedEventStore(db);

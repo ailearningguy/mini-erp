@@ -1,0 +1,27 @@
+import { describe, it, expect } from '@jest/globals';
+
+describe('Core interfaces', () => {
+  it('should have IEventBus interface file', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const interfacePath = path.resolve(__dirname, '../../src/core/event-bus/event-bus.interface.ts');
+    expect(fs.existsSync(interfacePath)).toBe(true);
+  });
+
+  it('IEventBus should have emit method', () => {
+    const content = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../src/core/event-bus/event-bus.interface.ts'),
+      'utf-8',
+    );
+    expect(content).toMatch(/emit\s*[<(]/);
+    expect(content).toContain('interface IEventBus');
+  });
+
+  it('EventBus class should implement IEventBus', () => {
+    const content = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../src/core/event-bus/event-bus.ts'),
+      'utf-8',
+    );
+    expect(content).toContain('implements IEventBus');
+  });
+});
