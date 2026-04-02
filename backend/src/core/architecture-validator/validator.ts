@@ -116,30 +116,42 @@ class ArchitectureValidator {
     }
   }
 
-  validateNoCoreToModule(graph: DependencyGraph): void {
-    const coreModules = graph.nodes.filter(n => n.startsWith('core/'));
-    const moduleModules = graph.nodes.filter(n => n.startsWith('modules/'));
-    const coreToModuleEdges = graph.edges.filter(
-      e => coreModules.includes(e.from) && moduleModules.includes(e.to)
-    );
+  validateNoCoreToModule(
+    graph: DependencyGraph,
+    moduleTokens: string[] = [],
+  ): void {
+    const moduleTokenSet = new Set(moduleTokens);
+    
+    const coreToModuleEdges = graph.edges.filter((e) => {
+      const fromIsModule = moduleTokenSet.has(e.from);
+      const toIsModule = moduleTokenSet.has(e.to);
+      return !fromIsModule && toIsModule;
+    });
 
     if (coreToModuleEdges.length > 0) {
       throw new Error(
-        `Core must not depend on modules. Found ${coreToModuleEdges.length} violations.`
+        `Core must not depend on modules. Found ${coreToModuleEdges.length} violations: `
+        + coreToModuleEdges.map(e => `"${e.from}" -> "${e.to}"`).join(', '),
       );
     }
   }
 
-  validateNoCoreToPlugin(graph: DependencyGraph): void {
-    const coreModules = graph.nodes.filter(n => n.startsWith('core/'));
-    const pluginModules = graph.nodes.filter(n => n.startsWith('plugins/'));
-    const coreToPluginEdges = graph.edges.filter(
-      e => coreModules.includes(e.from) && pluginModules.includes(e.to)
-    );
+  validateNoCoreToPlugin(
+    graph: DependencyGraph,
+    pluginTokens: string[] = [],
+  ): void {
+    const pluginTokenSet = new Set(pluginTokens);
+    
+    const coreToPluginEdges = graph.edges.filter((e) => {
+      const fromIsPlugin = pluginTokenSet.has(e.from);
+      const toIsPlugin = pluginTokenSet.has(e.to);
+      return !fromIsPlugin && toIsPlugin;
+    });
 
     if (coreToPluginEdges.length > 0) {
       throw new Error(
-        `Core must not depend on plugins. Found ${coreToPluginEdges.length} violations.`
+        `Core must not depend on plugins. Found ${coreToPluginEdges.length} violations: `
+        + coreToPluginEdges.map(e => `"${e.from}" -> "${e.to}"`).join(', '),
       );
     }
   }
