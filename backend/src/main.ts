@@ -106,6 +106,9 @@ async function bootstrap(): Promise<void> {
     useFactory: (c) => new HookExecutor(c.get('HookRegistry'), logger),
     deps: ['HookRegistry'],
   });
+  container.registerCore('IHookExecutor', {
+    useFactory: (c) => c.get('HookExecutor'),
+  });
   container.registerCore('CapabilityGovernanceRegistry', {
     useFactory: () => new CapabilityGovernanceRegistry(),
   });
@@ -147,6 +150,7 @@ async function bootstrap(): Promise<void> {
     const redis = container.resolve('Redis');
     return new CacheService(redis as ConstructorParameters<typeof CacheService>[0]);
   }, ['Redis']);
+  container.register('ICacheService', () => container.resolve<CacheService>('CacheService'), ['CacheService']);
   container.register('PluginLoader', () => new PluginLoader());
   container.register('ExternalServiceProxy', () => new ExternalServiceProxy(new PluginGuard()));
   container.register('ArchitectureValidator', () => new ArchitectureValidator());

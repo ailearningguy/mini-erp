@@ -1,4 +1,5 @@
 import { CACHE_CONSTANTS } from '@shared/constants';
+import type { ICacheService } from './cache-service.interface';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -31,7 +32,7 @@ interface CacheConfig {
 
 const NOOP_HOOKS: CacheHooks = {};
 
-class CacheService {
+class CacheService implements ICacheService {
   private mutexes = new Map<string, Promise<unknown>>();
   private hits = 0;
   private misses = 0;

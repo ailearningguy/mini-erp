@@ -40,4 +40,16 @@ describe('Core interfaces', () => {
     expect(content).toMatch(/startSaga\s*[<(]/);
     expect(content).toContain('interface ISagaOrchestrator');
   });
+
+  it('should have ICacheService interface file', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    expect(fs.existsSync(path.resolve(__dirname, '../../src/core/cache/cache-service.interface.ts'))).toBe(true);
+  });
+
+  it('should have IHookExecutor interface file', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    expect(fs.existsSync(path.resolve(__dirname, '../../src/core/hooks/hook-executor.interface.ts'))).toBe(true);
+  });
 });

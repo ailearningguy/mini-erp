@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { HookContext, HookRegistration } from './types';
 import type { HookRegistry } from './hook-registry';
+import type { IHookExecutor } from './hook-executor.interface';
 
 interface Logger {
   info(obj: Record<string, unknown>, msg: string): void;
@@ -8,13 +9,13 @@ interface Logger {
   error(obj: Record<string, unknown>, msg: string): void;
 }
 
-class HookExecutor {
+class HookExecutor implements IHookExecutor {
   constructor(
     private registry: HookRegistry,
     private logger: Logger,
   ) {}
 
-  async execute(pointName: string, phase: 'pre' | 'post', data: any): Promise<HookContext> {
+  async execute<TData = unknown>(pointName: string, phase: 'pre' | 'post', data: TData): Promise<HookContext<TData>> {
     const point = this.registry.getPoint(pointName);
     const hooks = this.registry.getHooks(pointName, phase);
 
