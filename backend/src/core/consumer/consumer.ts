@@ -39,6 +39,15 @@ class EventConsumer extends EventEmitter {
     return [...this.handlers.keys()];
   }
 
+  unregisterAll(): void {
+    this.handlers.clear();
+    this.aggregateQueues.clear();
+  }
+
+  unregisterHandler(eventType: string): boolean {
+    return this.handlers.delete(eventType);
+  }
+
   async consume(rawMessage: unknown): Promise<void> {
     const event = this.schemaRegistry.validate(
       (rawMessage as EventEnvelope).type,

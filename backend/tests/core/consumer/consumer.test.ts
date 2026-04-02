@@ -246,3 +246,29 @@ describe('EventConsumer handler registration', () => {
     );
   });
 });
+
+describe('EventConsumer unregisterAll', () => {
+  let consumer: EventConsumer;
+  let mocks: ReturnType<typeof createMocks>;
+
+  beforeEach(() => {
+    mocks = createMocks();
+    consumer = new EventConsumer(
+      mocks.processedEventStore as any,
+      mocks.schemaRegistry as any,
+      mocks.rateLimiter as any,
+      mocks.dbTransaction as any,
+    );
+  });
+
+  it('should clear all registered handlers', () => {
+    consumer.registerHandler('event.a', async () => {});
+    consumer.registerHandler('event.b', async () => {});
+
+    expect(consumer.getRegisteredHandlerTypes()).toHaveLength(2);
+
+    consumer.unregisterAll();
+
+    expect(consumer.getRegisteredHandlerTypes()).toHaveLength(0);
+  });
+});
