@@ -165,6 +165,108 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/modules:
+    get:
+      summary: List active modules
+      operationId: listModules
+      tags: [Modules]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of active modules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Module'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/modules/install:
+    post:
+      summary: Install a module
+      operationId: installModule
+      tags: [Modules]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: Module name to install
+      responses:
+        '200':
+          description: Module installed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: installed
+                      module:
+                        type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/modules/uninstall:
+    post:
+      summary: Uninstall a module
+      operationId: uninstallModule
+      tags: [Modules]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: Module name to uninstall
+      responses:
+        '200':
+          description: Module uninstalled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: uninstalled
+                      module:
+                        type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
 components:
   schemas:
     Product:
@@ -287,6 +389,27 @@ components:
             trace_id:
               type: string
 
+    Module:
+      type: object
+      properties:
+        name:
+          type: string
+          example: product
+        version:
+          type: string
+          example: '2026.04.01'
+        enabled:
+          type: boolean
+        dependencies:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              version:
+                type: string
+
     ReadinessResponse:
       type: object
       properties:
@@ -301,3 +424,23 @@ components:
                 type: string
               ok:
                 type: boolean
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - Invalid or missing authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Bad Request - Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

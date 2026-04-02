@@ -11,6 +11,27 @@ interface ServiceRegistration<T = unknown> {
   deps: string[];
 }
 
+interface IModule {
+  name: string;
+  onInit: () => Promise<void>;
+  onDestroy: () => Promise<void>;
+}
+
+interface IModuleFactory {
+  create: () => { providers: Array<{ token: string; factory: Factory }>; module: IModule };
+}
+
+interface ModuleMetadata {
+  name: string;
+  version: string;
+  enabled: boolean;
+  dependencies: string[];
+  entry: () => Promise<IModuleFactory>;
+  manifest: { name: string; version: string; enabled: boolean };
+}
+
+type ContainerState = 'IDLE' | 'BUILDING' | 'READY' | 'DISPOSING';
+
 const RESTRICTED_TOKEN_PATTERNS = [
   /repository/i,
   /\.schema$/i,
@@ -21,6 +42,10 @@ class DIContainer {
   private services = new Map<string, ServiceRegistration>();
   private resolving = new Set<string>();
   private currentActor: string = 'core';
+  private modules: IModule[] = [];
+  private moduleInstances = new Map<string, unknown>();
+  private coreInstances = new Map<string, unknown>();
+  private containerState: ContainerState = 'IDLE';
 
   setActor(actor: string): void {
     this.currentActor = actor;
@@ -43,6 +68,11 @@ class DIContainer {
     }
 
     this.services.set(token, { factory, singleton, deps });
+  }
+
+  registerCore(token: string, definition: { useFactory: () => unknown }): void {
+    const factory = definition.useFactory;
+    this.services.set(token, { factory, singleton: true, deps: [] });
   }
 
   resolve<T>(token: string): T {
@@ -128,10 +158,71 @@ class DIContainer {
 
   async rebuild(_plugins: ActivePlugin[]): Promise<void> {
   }
+
+  async build(modules: ModuleMetadata[]): Promise<void> {
+    if (this.containerState !== 'IDLE') {
+      throw new Error(`Cannot build from state: ${this.containerState}`);
+    }
+    this.containerState = 'BUILDING';
+
+    for (const metadata of modules) {
+      if (!metadata.enabled) continue;
+
+      const factory = await metadata.entry();
+      const { providers, module } = factory.create();
+
+      for (const provider of providers) {
+        this.register(provider.token, provider.factory);
+      }
+
+      await module.onInit();
+      this.modules.push(module);
+      this.moduleInstances.set(metadata.name, module);
+    }
+
+    this.containerState = 'READY';
+  }
+
+  async dispose(): Promise<void> {
+    await this.disposeInternal();
+  }
+
+  private async disposeInternal(): Promise<void> {
+    if (this.containerState !== 'READY') return;
+    this.containerState = 'DISPOSING';
+
+    for (const m of [...this.modules].reverse()) {
+      try { await m.onDestroy(); } catch (err) { console.error(err); }
+    }
+
+    for (const [_token, instance] of this.moduleInstances) {
+      if (instance && typeof (instance as { dispose?: () => Promise<void> }).dispose === 'function') {
+        try { await (instance as { dispose: () => Promise<void> }).dispose(); } catch (err) { console.error(err); }
+      }
+    }
+
+    if (this.services.has('EventSchemaRegistry')) {
+      const schemaReg = this.resolve('EventSchemaRegistry') as { clear?: () => void } | undefined;
+      if (schemaReg?.clear) {
+        schemaReg.clear();
+      }
+    }
+
+    if (this.services.has('EventConsumer')) {
+      const eventConsumer = this.resolve('EventConsumer') as { unregisterAll?: () => void } | undefined;
+      if (eventConsumer?.unregisterAll) {
+        eventConsumer.unregisterAll();
+      }
+    }
+
+    this.moduleInstances.clear();
+    this.modules = [];
+    this.containerState = 'IDLE';
+  }
 }
 
 interface ActivePlugin {
   name: string;
 }
 
-export { DIContainer };
+export { DIContainer, IModule, IModuleFactory, ModuleMetadata, ActivePlugin };

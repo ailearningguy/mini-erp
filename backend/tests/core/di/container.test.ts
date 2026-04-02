@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { DIContainer } from '@core/di/container';
 
 describe('DIContainer', () => {
@@ -83,6 +83,78 @@ describe('DIContainer', () => {
     it('should allow plugin to register service interface tokens', () => {
       container.setActor('plugin:analytics');
       expect(() => container.register('IProductService', () => ({}))).not.toThrow();
+    });
+  });
+
+  describe('dispose event cleanup', () => {
+    it('should clear event schemas on dispose', async () => {
+      const testContainer = new DIContainer();
+      const mockSchemaRegistry = {
+        register: jest.fn(),
+        clear: jest.fn(),
+        hasSchema: jest.fn(),
+        getRegisteredTypes: jest.fn().mockReturnValue([]),
+      };
+      testContainer.register('EventSchemaRegistry', () => mockSchemaRegistry);
+
+      const mockModule: any = {
+        name: 'test',
+        onInit: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+        onDestroy: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      };
+
+      const mockFactory: any = {
+        create: () => ({ providers: [], module: mockModule }),
+      };
+
+      const metadata: any = {
+        name: 'test',
+        version: '2026.04.01',
+        enabled: true,
+        dependencies: [],
+        entry: async () => mockFactory,
+        manifest: { name: 'test', version: '2026.04.01', enabled: true },
+      };
+
+      await testContainer.build([metadata]);
+      testContainer.resolve('EventSchemaRegistry');
+      await testContainer.dispose();
+
+      expect(mockSchemaRegistry.clear).toHaveBeenCalled();
+    });
+
+    it('should unregister event handlers on dispose', async () => {
+      const testContainer = new DIContainer();
+      const mockEventConsumer = {
+        unregisterAll: jest.fn(),
+        registerHandler: jest.fn(),
+        consume: jest.fn(),
+      };
+      testContainer.register('EventConsumer', () => mockEventConsumer);
+
+      const mockModule: any = {
+        name: 'test',
+        onInit: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+        onDestroy: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      };
+
+      const mockFactory: any = {
+        create: () => ({ providers: [], module: mockModule }),
+      };
+
+      await testContainer.build([{
+        name: 'test',
+        version: '2026.04.01',
+        enabled: true,
+        dependencies: [],
+        entry: async () => mockFactory,
+        manifest: { name: 'test', version: '2026.04.01', enabled: true },
+      }]);
+
+      testContainer.resolve('EventConsumer');
+      await testContainer.dispose();
+
+      expect(mockEventConsumer.unregisterAll).toHaveBeenCalled();
     });
   });
 });
