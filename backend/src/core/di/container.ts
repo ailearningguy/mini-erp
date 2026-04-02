@@ -2,6 +2,15 @@ type Factory<T = unknown> = () => T;
 
 import type { HookRegistration } from '@core/hooks/types';
 
+interface CapabilityHandlerStub {
+  capability: string;
+  stage?: string;
+  priority?: number;
+  exclusive?: boolean;
+  module?: string;
+  handle: (ctx: any) => Promise<void>;
+}
+
 interface ServiceRegistration<T = unknown> {
   factory: Factory<T>;
   singleton: boolean;
@@ -24,6 +33,7 @@ interface ModuleDefinition {
   providers: ProviderRegistration[];
   exports?: string[];
   hooks?: HookRegistration[];
+  capabilities?: CapabilityHandlerStub[];
 }
 
 interface ProviderRegistration<T = unknown> {
@@ -83,6 +93,7 @@ class DIContainer {
   private containerState: ContainerState = 'IDLE';
   private buildMutex: Promise<void> = Promise.resolve();
   private pendingHooks: HookRegistration[] = [];
+  private pendingCapabilities: CapabilityHandlerStub[] = [];
   private exportedTokens = new Map<string, string>();
 
   setActor(actor: string): void {
@@ -224,6 +235,7 @@ class DIContainer {
         modules: [...this.modules],
         exports: new Map(this.exportedTokens),
         hooks: [...this.pendingHooks],
+        capabilities: [...this.pendingCapabilities],
       };
 
       try {
@@ -235,6 +247,7 @@ class DIContainer {
         this.modules = snapshot.modules;
         this.exportedTokens = snapshot.exports;
         this.pendingHooks = snapshot.hooks;
+        this.pendingCapabilities = snapshot.capabilities;
         this.containerState = 'READY';
         throw new Error(`Rebuild failed, rolled back to previous state: ${err}`);
       }
@@ -286,6 +299,10 @@ class DIContainer {
           this.pendingHooks.push(...def.hooks);
         }
 
+        if (def.capabilities) {
+          this.pendingCapabilities.push(...def.capabilities);
+        }
+
         this.modules.push(def.module);
       }
 
@@ -312,6 +329,14 @@ class DIContainer {
         }
       }
       this.pendingHooks = [];
+
+      const capabilityRegistry = this.coreInstances.get('CapabilityRegistry') as import('@core/capability/capability-registry').CapabilityRegistry | undefined;
+      if (capabilityRegistry) {
+        for (const handler of this.pendingCapabilities) {
+          capabilityRegistry.registerHandler(handler);
+        }
+      }
+      this.pendingCapabilities = [];
 
       this.containerState = 'READY';
     } catch (err) {
@@ -358,6 +383,13 @@ class DIContainer {
       if (hookRegistry) {
         for (const mod of this.modules) {
           hookRegistry.clearByModule(mod.name);
+        }
+      }
+
+      const capabilityRegistry = this.coreInstances.get('CapabilityRegistry') as import('@core/capability/capability-registry').CapabilityRegistry | undefined;
+      if (capabilityRegistry) {
+        for (const mod of this.modules) {
+          capabilityRegistry.clearByModule(mod.name);
         }
       }
 
@@ -484,6 +516,9 @@ class DIContainer {
           this.exportedTokens.set(token, metadata.name);
         }
       }
+      if (def.capabilities) {
+        this.pendingCapabilities.push(...def.capabilities);
+      }
       this.modules.push(def.module);
     }
 
@@ -526,6 +561,7 @@ class DIContainer {
     this.moduleProviders.clear();
     this.exportedTokens.clear();
     this.pendingHooks = [];
+    this.pendingCapabilities = [];
     this.modules = [];
     this.containerState = 'IDLE';
   }
