@@ -8,20 +8,20 @@ import {
   OrderCancelledEventSchema,
 } from './events/order.events';
 import type { EventSchemaRegistry } from '@core/event-schema-registry/registry';
-import type { EventBus } from '@core/event-bus/event-bus';
+import type { IEventBus } from '@core/event-bus/event-bus.interface';
 import type { IInventoryService } from '@modules/inventory/interfaces/inventory.service.interface';
-import { SagaOrchestrator } from '@core/saga/saga-orchestrator';
-import type { HookExecutor } from '@core/hooks/hook-executor';
+import type { ISagaOrchestrator } from '@core/saga/saga-orchestrator.interface';
+import type { IHookExecutor } from '@core/hooks/hook-executor.interface';
 import type { Express } from 'express';
 import type { Db } from '@shared/types/db';
 
 interface OrderModuleConfig {
   db: Db;
-  eventBus: EventBus;
+  eventBus: IEventBus;
   schemaRegistry: EventSchemaRegistry;
   inventoryService: IInventoryService;
-  sagaOrchestrator: SagaOrchestrator;
-  hookExecutor: HookExecutor;
+  sagaOrchestrator: ISagaOrchestrator;
+  hookExecutor: IHookExecutor;
   app: Express;
 }
 

@@ -70,4 +70,29 @@ describe('Core interfaces', () => {
     const anyMatches = content.match(/:\s*any\b/g);
     expect(anyMatches).toBeNull();
   });
+
+  it('product.service.ts should import IEventBus not EventBus', () => {
+    const content = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../src/modules/product/product.service.ts'),
+      'utf-8',
+    );
+    expect(content).toContain("import type { IEventBus }");
+  });
+
+  it('order.service.ts should import interfaces not concrete classes', () => {
+    const content = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../src/modules/order/order.service.ts'),
+      'utf-8',
+    );
+    expect(content).toContain("import type { IEventBus }");
+    expect(content).toContain("import type { ISagaOrchestrator }");
+  });
+
+  it('inventory.service.ts should import IEventBus not EventBus', () => {
+    const content = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../src/modules/inventory/inventory.service.ts'),
+      'utf-8',
+    );
+    expect(content).toContain("import type { IEventBus }");
+  });
 });

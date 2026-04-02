@@ -3,7 +3,7 @@ import { eq, and, gt } from 'drizzle-orm';
 import { products } from './product.schema';
 import type { CreateProductDto, UpdateProductDto } from './dto/create-product.dto';
 import type { IProductService, Product } from './interfaces/product.service.interface';
-import { EventBus } from '@core/event-bus/event-bus';
+import type { IEventBus } from '@core/event-bus/event-bus.interface';
 import { AppError, ErrorCode } from '@shared/errors';
 
 import type { Db } from '@shared/types/db';
@@ -11,7 +11,7 @@ import type { Db } from '@shared/types/db';
 class ProductService implements IProductService {
   constructor(
     private readonly db: Db,
-    private readonly eventBus: EventBus,
+    private readonly eventBus: IEventBus,
   ) {}
 
   async getById(id: string): Promise<Product | null> {

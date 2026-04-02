@@ -3,20 +3,20 @@ import { eq } from 'drizzle-orm';
 import { orders } from './order.schema';
 import type { IOrderService, Order } from './interfaces/order.service.interface';
 import { OrderCreatedEventSchema, OrderConfirmedEventSchema, OrderCancelledEventSchema } from './events/order.events';
-import { EventBus } from '@core/event-bus/event-bus';
+import type { IEventBus } from '@core/event-bus/event-bus.interface';
 import type { IInventoryService } from '@modules/inventory/interfaces/inventory.service.interface';
-import { SagaOrchestrator } from '@core/saga/saga-orchestrator';
-import type { HookExecutor } from '@core/hooks/hook-executor';
+import type { ISagaOrchestrator } from '@core/saga/saga-orchestrator.interface';
+import type { IHookExecutor } from '@core/hooks/hook-executor.interface';
 import { AppError, ErrorCode } from '@shared/errors';
 import type { Db } from '@shared/types/db';
 
 class OrderService implements IOrderService {
   constructor(
     private readonly db: Db,
-    private readonly eventBus: EventBus,
+    private readonly eventBus: IEventBus,
     private readonly inventoryService: IInventoryService,
-    private readonly sagaOrchestrator: SagaOrchestrator,
-    private readonly hookExecutor: HookExecutor,
+    private readonly sagaOrchestrator: ISagaOrchestrator,
+    private readonly hookExecutor: IHookExecutor,
   ) {}
 
   async getById(id: string): Promise<Order | null> {

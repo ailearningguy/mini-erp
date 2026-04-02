@@ -2,20 +2,20 @@ import type { ModuleFactory, ModuleDefinition, DIContainer } from '@core/di/cont
 import { OrderModule } from './order.module';
 import type { IInventoryService } from '@modules/inventory/interfaces/inventory.service.interface';
 import type { Db } from '@shared/types/db';
-import type { EventBus } from '@core/event-bus/event-bus';
+import type { IEventBus } from '@core/event-bus/event-bus.interface';
 import type { EventSchemaRegistry } from '@core/event-schema-registry/registry';
-import { SagaOrchestrator } from '@core/saga/saga-orchestrator';
-import type { HookExecutor } from '@core/hooks/hook-executor';
+import type { ISagaOrchestrator } from '@core/saga/saga-orchestrator.interface';
+import type { IHookExecutor } from '@core/hooks/hook-executor.interface';
 import type { Express } from 'express';
 
 const orderModuleFactory: ModuleFactory = {
   async create(container: DIContainer): Promise<ModuleDefinition> {
     const db = container.get<Db>('Database');
-    const eventBus = container.get<EventBus>('EventBus');
+    const eventBus = container.get<IEventBus>('IEventBus');
     const schemaRegistry = container.get<EventSchemaRegistry>('EventSchemaRegistry');
     const inventoryService = container.get<IInventoryService>('IInventoryService');
-    const sagaOrchestrator = container.get<SagaOrchestrator>('SagaOrchestrator');
-    const hookExecutor = container.get<HookExecutor>('HookExecutor');
+    const sagaOrchestrator = container.get<ISagaOrchestrator>('ISagaOrchestrator');
+    const hookExecutor = container.get<IHookExecutor>('IHookExecutor');
     const app = container.get<Express>('ExpressApp');
 
     const module = new OrderModule({

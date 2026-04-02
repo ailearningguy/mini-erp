@@ -3,14 +3,14 @@ import { eq, and } from 'drizzle-orm';
 import { inventory } from './inventory.schema';
 import type { IInventoryService, InventoryRecord, ReserveItem } from './interfaces/inventory.service.interface';
 import { InventoryReservedEventSchema, InventoryReleasedEventSchema, InventoryAdjustedEventSchema } from './events/inventory.events';
-import { EventBus } from '@core/event-bus/event-bus';
+import type { IEventBus } from '@core/event-bus/event-bus.interface';
 import { AppError, ErrorCode } from '@shared/errors';
 import type { Db } from '@shared/types/db';
 
 class InventoryService implements IInventoryService {
   constructor(
     private readonly db: Db,
-    private readonly eventBus: EventBus,
+    private readonly eventBus: IEventBus,
   ) {}
 
   async getByProductId(productId: string): Promise<InventoryRecord | null> {
