@@ -173,11 +173,11 @@ Database: Schema pgTable() (camelCase property)
 **DTOs (`*.dto.ts`):**
 - TẤT CẢ property names PHẢI là `camelCase` — `cartId`, `paymentMethod`
 - KHÔNG dùng `snake_case` trong DTO properties
-- Request body `snake_case` từ client → `SnakeCaseTransformPipe` tự convert
+- Request body `snake_case` từ client → `snakeCaseMiddleware` tự convert
 
 **Controllers (`*.controller.ts`):**
 - Return raw entity/service result — KHÔNG manual convert naming
-- `SnakeCaseInterceptor` tự xử lý response keys
+- `snakeCaseResponseMiddleware` tự xử lý response keys
 
 **Services (`*.service.ts`):**
 - Dùng `camelCase` cho mọi biến, return value
@@ -185,7 +185,7 @@ Database: Schema pgTable() (camelCase property)
 
 **OpenAPI Spec (`specs/openapi.yaml`):**
 - TẤT CẢ schema properties PHẢI là `snake_case`
-- Match với actual API response (sau SnakeCaseInterceptor)
+- Match với actual API response (sau snakeCaseResponseMiddleware)
 
 **Frontend:**
 - Generated types từ spec → dùng `snake_case`
@@ -195,7 +195,7 @@ Database: Schema pgTable() (camelCase property)
 
 - KHÔNG dùng `snake_case` cho DTO property names
 - KHÔNG dùng `camelCase` cho OpenAPI spec schema properties
-- KHÔNG manual convert naming trong controller/service (dùng global pipe/interceptor)
+- KHÔNG manual convert naming trong controller/service (dùng global middleware)
 - KHÔNG tạo custom frontend types khi đã có generated types từ spec
 
 ---
@@ -232,7 +232,21 @@ plugins/{plugin-name}/
 ```typescript
 interface IPlugin {
   getMetadata(): PluginMetadata;
-  getModules(): Module[];
+  getModules(): unknown[];
+
+  // Lifecycle hooks
+  init(db: Db): void;
+  onActivate(): Promise<void>;      // REQUIRED
+  onDeactivate(): Promise<void>;    // REQUIRED
+  onInstall?(): Promise<void>;
+  onUninstall?(): Promise<void>;
+  dispose(): Promise<void>;         // MANDATORY
+}
+
+interface PluginPermission {
+  resource: string;          // e.g., "product", "order", "external:smtp"
+  actions: string[];         // e.g., ["read", "write"] or ["call"]
+  scope?: string;            // e.g., "plugin_analytics_*" for isolated storage
 }
 
 interface PluginMetadata {
@@ -240,9 +254,10 @@ interface PluginMetadata {
   version: string;        // Date-based: YYYY.MM.DD
   description: string;
   author?: string;
-  dependencies?: string[];
+  dependencies?: { name: string; version: string }[];
   enabled: boolean;
-  config?: object;
+  config?: Record<string, unknown>;
+  permissions?: PluginPermission[];
   trusted?: boolean;      // NEW in v2.2 - Phase 1 plugins are TRUSTED ONLY
 }
 ```
@@ -305,7 +320,7 @@ const pluginConfig = {
 2. **Spec** → Update OpenAPI spec
 3. **Implement** → Create module, service, entities
 4. **Test** → TDD: Red → Green → Refactor
-5. **Document** → Create docs in `modules/{name}/docs/`
+5. **Document** → Create docs in `plugins/{name}/docs/`
 6. **Register** → Add to `plugins.json`
 7. **Security Check** → Validate `trusted` flag, chỉ cài đặt plugin trusted trong Phase 1
 
@@ -422,7 +437,7 @@ export const outbox = pgTable('outbox', {
 
 | Module | Event Types |
 |--------|------------|
-| Product | `product.created.v1`, `product.updated.v1`, `product.deleted.v1` |
+| Product | `product.created.v1`, `product.updated.v1`, `product.deactivated.v1` |
 | Order | `order.created.v1`, `order.confirmed.v1`, `order.cancelled.v1`, `order.completed.v1` |
 | Inventory | `inventory.reserved.v1`, `inventory.released.v1`, `inventory.adjusted.v1` |
 | Voucher | `voucher.created.v1`, `voucher.redeemed.v1`, `voucher.expired.v1` |
@@ -571,7 +586,8 @@ This project uses GitNexus for code intelligence. Run `npx gitnexus analyze` aft
 - **Minimum**: 80% code coverage
 
 ### E2E Framework
-- **Playwright** for end-to-end testing
+- **Jest** for unit, integration, and E2E testing
+- **Playwright** for end-to-end testing (future — not yet configured)
 
 ### TDD Approach
 - **Full TDD**: Red → Green → Refactor cho mọi feature
