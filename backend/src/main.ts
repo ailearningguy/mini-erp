@@ -30,6 +30,7 @@ import { API_CONSTANTS, EVENT_CONSTANTS } from '@shared/constants';
 import { logger } from '@core/logging/logger';
 import { metricsService } from '@core/metrics/metrics.service';
 import { createMetricsHandler } from '@core/metrics/metrics-endpoint';
+import { QueueManager } from '@core/jobs/queue-manager';
 import type { Db } from '@shared/types/db';
 
 async function bootstrap(): Promise<void> {
@@ -138,6 +139,10 @@ async function bootstrap(): Promise<void> {
   const redis = container.resolve<Redis>('Redis');
   const idempotencyStore = new ApiIdempotencyStore(redis as any);
   app.use(createIdempotencyMiddleware(idempotencyStore));
+
+  // --- QueueManager for background jobs ---
+  const queueManager = new QueueManager(redis);
+  logger.info('QueueManager initialized');
 
   // --- Auth (after rate limiter + idempotency) ---
   app.use('/api', authMiddleware(config));
@@ -294,6 +299,13 @@ async function bootstrap(): Promise<void> {
         logger.info('Database pool closed');
       } catch (e) {
         logger.error({ err: e }, 'Error closing database pool');
+      }
+
+      try {
+        await queueManager.closeAll();
+        logger.info('BullMQ queues closed');
+      } catch (e) {
+        logger.error({ err: e }, 'Error closing BullMQ queues');
       }
 
       try {
