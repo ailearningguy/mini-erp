@@ -1,5 +1,7 @@
 type Factory<T = unknown> = () => T;
 
+import type { HookRegistration } from '@core/hooks/types';
+
 interface ServiceRegistration<T = unknown> {
   factory: Factory<T>;
   singleton: boolean;
@@ -21,7 +23,7 @@ interface ModuleDefinition {
   module: IModule;
   providers: ProviderRegistration[];
   exports?: string[];
-  hooks?: HookRegistrationStub[];
+  hooks?: HookRegistration[];
 }
 
 interface ProviderRegistration<T = unknown> {
@@ -49,13 +51,6 @@ interface ModuleManifest {
   enabled: boolean;
   dependencies?: string[];
   description?: string;
-}
-
-interface HookRegistrationStub {
-  point: string;
-  phase: 'pre' | 'post';
-  handler: (ctx: any) => Promise<void>;
-  priority?: number;
 }
 
 type ContainerState = 'IDLE' | 'BUILDING' | 'READY' | 'DISPOSING';
@@ -87,7 +82,7 @@ class DIContainer {
   private modules: IModule[] = [];
   private containerState: ContainerState = 'IDLE';
   private buildMutex: Promise<void> = Promise.resolve();
-  private pendingHooks: HookRegistrationStub[] = [];
+  private pendingHooks: HookRegistration[] = [];
   private exportedTokens = new Map<string, string>();
 
   setActor(actor: string): void {
@@ -381,7 +376,7 @@ class DIContainer {
     return new Map(this.exportedTokens);
   }
 
-  getPendingHooks(): HookRegistrationStub[] {
+  getPendingHooks(): HookRegistration[] {
     return [...this.pendingHooks];
   }
 
